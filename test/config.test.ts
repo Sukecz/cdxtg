@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, parseNumericList, parseWorkspaces } from "../src/config.js";
+import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, parseNumericList, parseWorkspaces, persistAllowedUser } from "../src/config.js";
 
 describe("parseNumericList", () => {
   it("accepts an empty discovery-mode allowlist", () => {
@@ -42,6 +42,21 @@ describe("createAllowedUserChecker", () => {
       utimesSync(envFile, future, future);
       expect(isAllowed(123)).toBe(false);
       expect(isAllowed(456)).toBe(true);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("persistAllowedUser", () => {
+  it("updates only the allowlist and keeps the environment file private", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "cdxtg-pair-"));
+    const envFile = path.join(directory, "telegram.env");
+    try {
+      writeFileSync(envFile, "TELEGRAM_BOT_TOKEN=test-token\nTELEGRAM_ALLOWED_USER_IDS=\n", { mode: 0o600 });
+      persistAllowedUser(envFile, 123);
+      expect(readFileSync(envFile, "utf8")).toBe("TELEGRAM_BOT_TOKEN=test-token\nTELEGRAM_ALLOWED_USER_IDS=123\n");
+      expect(statSync(envFile).mode & 0o777).toBe(0o600);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

@@ -6,8 +6,6 @@
   </picture>
 </p>
 
-<h1 align="center">cdxtg</h1>
-
 <p align="center"><strong>Lightweight, secure control of local Codex through Telegram.</strong></p>
 
 `cdxtg` connects a private Telegram bot to Codex running on your computer or server. Start coding tasks, continue conversations, switch workspaces, and stop active tasks from your phone. Your source code and Codex authentication stay on your machine.
@@ -63,34 +61,39 @@ TELEGRAM_BOT_TOKEN=123456:replace_me
 TELEGRAM_ALLOWED_USER_IDS=
 ```
 
-Start the bot temporarily to discover your Telegram ID:
-
-```bash
-npm run build
-npm start
-```
-
-Send `/id` to the bot. It will show your numeric Telegram user ID but will not accept Codex tasks yet. Add the ID to `telegram.env`:
-
-```dotenv
-TELEGRAM_ALLOWED_USER_IDS=123456789
-# Optional extra paths not yet present in Codex history:
-CODEX_WORKSPACES=/home/me/projects,/home/me/another-project
-```
-
-The running bot hot-reloads `TELEGRAM_ALLOWED_USER_IDS`; your next message is accepted without a restart. Press `Ctrl+C` after testing, then install the persistent service:
+Install and start the persistent service:
 
 ```bash
 npm run service:install
 ```
 
-This command builds the app, creates a user-level systemd service, starts it immediately, and enables automatic startup. It does not require `sudo`.
+If `TELEGRAM_ALLOWED_USER_IDS` is empty, the service log prints a one-time pairing command. Display it with:
+
+```bash
+journalctl --user -u cdxtg.service -n 20 --no-pager
+```
+
+Send the displayed command to the bot from a private chat:
+
+```text
+/pair ONE_TIME_CODE
+```
+
+The bot securely writes your Telegram user ID to `telegram.env`, invalidates the code, and grants access immediately without restarting. Telegram does not expose the bot owner's ID, so this local one-time code prevents an unknown first sender from claiming the bot.
+
+Optionally configure extra paths not yet present in Codex history:
+
+```dotenv
+CODEX_WORKSPACES=/home/me/projects,/home/me/another-project
+```
+
+The installer builds the app, creates a user-level systemd service, starts it immediately, and enables automatic startup. It does not require `sudo`.
 
 ```bash
 npm run service:status
 ```
 
-Separate multiple IDs or extra workspaces with commas. Every configured path must exist and be accessible to the service user.
+For unattended deployments, `TELEGRAM_ALLOWED_USER_IDS` can still be configured before startup. Separate multiple IDs or extra workspaces with commas. Every configured path must exist and be accessible to the service user.
 
 > [!NOTE]
 > `npm start` runs the bot only in the current terminal. Use `npm run service:install` for a persistent installation.
@@ -104,6 +107,7 @@ Every regular text message becomes a Codex prompt.
 | `/start` | Welcome message and access status |
 | `/help` | Command reference |
 | `/id` | Show your Telegram user ID and chat ID |
+| `/pair CODE` | Authorize the first user with the local one-time code |
 | `/new` | Choose a workspace and start a new session |
 | `/status` | Show workspace, mode, state, model, and Codex thread ID |
 | `/workspace` | Open the workspace picker |
@@ -135,7 +139,7 @@ Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additio
 | Variable | Default | Description |
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | required | Token received from BotFather |
-| `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated numeric Telegram user IDs; hot-reloaded at runtime |
+| `TELEGRAM_ALLOWED_USER_IDS` | empty | Authorized IDs; normally populated automatically by `/pair` |
 | `CODEX_WORKSPACES` | current directory | Optional extra paths merged with workspaces found in Codex history |
 | `CODEX_MODEL` | Codex default | Optional model passed to the SDK |
 | `CODEX_REASONING_EFFORT` | model default | `minimal`, `low`, `medium`, `high`, or `xhigh` |
