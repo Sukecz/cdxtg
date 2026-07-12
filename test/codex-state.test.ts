@@ -1,9 +1,9 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
-import { listCodexWorkspaces, mergeWorkspaceLists } from "../src/codex-state.js";
+import { listCodexModels, listCodexWorkspaces, mergeWorkspaceLists } from "../src/codex-state.js";
 
 describe("Codex workspace discovery", () => {
   it("reads unique recent workspaces from the latest Codex state database", () => {
@@ -29,5 +29,18 @@ describe("Codex workspace discovery", () => {
   it("merges configured and discovered workspaces without duplicates or stale paths", () => {
     expect(mergeWorkspaceLists([process.cwd()], [process.cwd(), "/missing/cdxtg-path"]))
       .toEqual([process.cwd()]);
+  });
+
+  it("lists visible models from the local Codex cache", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "cdxtg-models-"));
+    try {
+      writeFileSync(path.join(root, "models_cache.json"), JSON.stringify({ models: [
+        { slug: "model-a", display_name: "Model A", visibility: "list" },
+        { slug: "hidden", display_name: "Hidden", visibility: "hide" },
+      ] }));
+      expect(listCodexModels(root)).toEqual([{ slug: "model-a", displayName: "Model A" }]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

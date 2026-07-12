@@ -1,9 +1,14 @@
-import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 interface WorkspaceRow {
   cwd: unknown;
+}
+
+export interface CodexModel {
+  slug: string;
+  displayName: string;
 }
 
 export function listCodexWorkspaces(codexDir = defaultCodexDir()): string[] {
@@ -44,6 +49,24 @@ export function mergeWorkspaceLists(...lists: ReadonlyArray<readonly string[]>):
     }
   }
   return [...workspaces];
+}
+
+export function listCodexModels(codexDir = defaultCodexDir()): CodexModel[] {
+  if (!codexDir) return [];
+  try {
+    const payload = JSON.parse(readFileSync(path.join(codexDir, "models_cache.json"), "utf8")) as {
+      models?: Array<{ slug?: unknown; display_name?: unknown; visibility?: unknown }>;
+    };
+    return (payload.models ?? [])
+      .filter((model) => model.visibility !== "hide" && model.visibility !== "hidden")
+      .map((model) => ({
+        slug: typeof model.slug === "string" ? model.slug : "",
+        displayName: typeof model.display_name === "string" ? model.display_name : "",
+      }))
+      .filter((model) => model.slug && model.displayName);
+  } catch {
+    return [];
+  }
 }
 
 function findLatestStateDatabase(codexDir: string): string | null {

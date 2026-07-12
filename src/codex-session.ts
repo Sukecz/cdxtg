@@ -1,10 +1,11 @@
-import { Codex, type ApprovalMode, type SandboxMode, type Thread } from "@openai/codex-sdk";
+import { Codex, type ApprovalMode, type ModelReasoningEffort, type SandboxMode, type Thread } from "@openai/codex-sdk";
 
 export interface SessionOptions {
   workspace: string;
   mode: Extract<SandboxMode, "read-only" | "workspace-write" | "danger-full-access">;
   approvalPolicy: ApprovalMode;
   model?: string;
+  reasoningEffort?: ModelReasoningEffort;
 }
 
 export interface RunResult {
@@ -31,7 +32,7 @@ export class CodexSession {
     return { ...this.options, threadId: this.currentThreadId, busy: this.busy };
   }
 
-  reset(next?: Partial<Pick<SessionOptions, "workspace" | "mode">>): void {
+  reset(next?: Partial<Pick<SessionOptions, "workspace" | "mode" | "model" | "reasoningEffort">>): void {
     if (this.busy) throw new Error("Stop the running task with /stop first.");
     this.options = { ...this.options, ...next };
     this.thread = null;
@@ -74,6 +75,7 @@ export class CodexSession {
     approvalPolicy: ApprovalMode;
     skipGitRepoCheck: true;
     model?: string;
+    modelReasoningEffort?: ModelReasoningEffort;
   } {
     return {
       workingDirectory: this.options.workspace,
@@ -81,6 +83,7 @@ export class CodexSession {
       approvalPolicy: this.options.approvalPolicy,
       skipGitRepoCheck: true,
       ...(this.options.model ? { model: this.options.model } : {}),
+      ...(this.options.reasoningEffort ? { modelReasoningEffort: this.options.reasoningEffort } : {}),
     };
   }
 }

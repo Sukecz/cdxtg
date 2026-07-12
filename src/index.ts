@@ -13,6 +13,8 @@ async function main(): Promise<void> {
     { command: "new", description: "Choose workspace and start a session" },
     { command: "status", description: "Show the current session" },
     { command: "workspace", description: "Select a workspace" },
+    { command: "model", description: "Select a Codex model" },
+    { command: "reasoning", description: "Select reasoning effort" },
     { command: "mode", description: "Select readonly/write mode" },
     { command: "stop", description: "Stop the running task" },
     { command: "version", description: "Show the cdxtg version" },

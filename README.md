@@ -19,6 +19,7 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 - Telegram typing status while Codex is working;
 - automatic workspace discovery from local Codex thread history;
 - an inline workspace picker when starting a new session;
+- model and reasoning-effort pickers backed by the local Codex model cache;
 - safe `read-only`, opt-in `workspace-write`, and confirmed `danger-full-access` modes;
 - cancellation of active tasks;
 - direct integration through the official TypeScript SDK without parsing CLI output;
@@ -45,7 +46,7 @@ codex login status
 ## Quick installation
 
 ```bash
-git clone https://github.com/YOUR_ACCOUNT/cdxtg.git
+git clone https://github.com/Sukecz/cdxtg.git
 cd cdxtg
 npm ci
 npm run setup
@@ -103,6 +104,8 @@ Every regular text message becomes a Codex prompt.
 | `/status` | Show workspace, mode, state, model, and Codex thread ID |
 | `/workspace` | Open the workspace picker |
 | `/workspace 2` | Switch to the second workspace and start a new session |
+| `/model` | Select a Codex model for a new session |
+| `/reasoning` | Select reasoning effort (`minimal` through `xhigh`) |
 | `/mode readonly` | Start a new read-only session |
 | `/mode write` | Start a session that may write inside the workspace |
 | `/mode full` | Confirm and start a session with full service-user access |
@@ -131,6 +134,7 @@ Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additio
 | `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated numeric Telegram user IDs; hot-reloaded at runtime |
 | `CODEX_WORKSPACES` | current directory | Optional extra paths merged with workspaces found in Codex history |
 | `CODEX_MODEL` | Codex default | Optional model passed to the SDK |
+| `CODEX_REASONING_EFFORT` | model default | `minimal`, `low`, `medium`, `high`, or `xhigh` |
 | `CODEX_DEFAULT_MODE` | `read-only` | `read-only`, `workspace-write`, or `danger-full-access` |
 | `CODEX_ENABLE_WRITE` | `false` | Enables switching to write mode; hot-reloaded at runtime |
 | `CODEX_ENABLE_FULL_ACCESS` | `false` | Enables confirmed `/mode full`; hot-reloaded at runtime |
@@ -186,18 +190,8 @@ The package uses SemVer syntax such as `0.1.0`, while public feature releases ad
 
 For production use, prefer a dedicated unprivileged account and repositories without production secrets. `cdxtg` is a remote control surface for an agent, not a security sandbox by itself.
 
-## Why the SDK instead of app-server?
-
-Codex provides two relevant integration layers:
-
-- [Codex SDK](https://developers.openai.com/codex/codex-sdk/) is the official library for programmatically controlling local Codex agents and coding threads. It gives this small project sessions, streamed events, sandbox selection, and cancellation without implementing a protocol client.
-- [Codex app-server](https://developers.openai.com/codex/app-server/) is a lower-level JSON-RPC interface for deep client integrations. It additionally exposes conversation history, interactive approvals, authentication, model discovery, and detailed product events.
-
-Version 0.1 uses the SDK because it matches the current scope with less code. The integration is isolated behind `CodexSession`, allowing a future app-server backend over local `stdio` or a Unix socket without rewriting the Telegram layer. App-server WebSocket transport should not be exposed publicly and is currently documented as experimental and unsupported.
-
 ## Roadmap
 
-- optional app-server backend for history, approvals, and authentication;
 - session persistence and restart recovery;
 - image and document input;
 - safe delivery of generated artifacts;

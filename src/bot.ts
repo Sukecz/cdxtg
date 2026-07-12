@@ -1,7 +1,8 @@
 import { Bot, GrammyError, HttpError, type Context } from "grammy";
+import type { ModelReasoningEffort } from "@openai/codex-sdk";
 import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, type AppConfig, type SafeSandboxMode } from "./config.js";
-import { fullAccessKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, workspaceKeyboard } from "./bot-ui.js";
-import { listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
+import { fullAccessKeyboard, modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, workspaceKeyboard } from "./bot-ui.js";
+import { listCodexModels, listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
 import { CodexSession } from "./codex-session.js";
 import { errorMessage, splitTelegramText } from "./text.js";
 import pkg from "../package.json" with { type: "json" };
@@ -14,6 +15,8 @@ const HELP = `cdxtg commands:
 /status – show the current session
 /workspace – list allowed workspaces
 /workspace 2 – switch to workspace number 2
+/model – choose a model for a new session
+/reasoning – choose reasoning effort for a new session
 /mode readonly – use read-only mode
 /mode write – use write mode (requires local opt-in)
 /mode full – use full host access (requires local opt-in and confirmation)
@@ -42,6 +45,7 @@ export function createBot(config: AppConfig): Bot {
         mode: config.defaultMode,
         approvalPolicy: config.approvalPolicy,
         ...(config.model ? { model: config.model } : {}),
+        ...(config.reasoningEffort ? { reasoningEffort: config.reasoningEffort } : {}),
       });
       sessions.set(chatId, session);
     }
@@ -89,7 +93,35 @@ export function createBot(config: AppConfig): Bot {
       `Mode: ${info.mode}`,
       `Thread: ${info.threadId ?? "new – created with the first task"}`,
       `Model: ${info.model ?? "Codex default"}`,
+      `Reasoning: ${info.reasoningEffort ?? "model default"}`,
     ].join("\n"));
+  });
+
+  bot.command("model", async (ctx) => {
+    const session = getSession(ctx.chat.id);
+    if (session.busy) {
+      await ctx.reply("Cannot change the model while a task is running.");
+      return;
+    }
+    const models = listCodexModels();
+    if (models.length === 0) {
+      await ctx.reply("No models were found in the local Codex model cache.");
+      return;
+    }
+    await ctx.reply(`Current model: ${session.info.model ?? "Codex default"}\n\nSelect a model for a new session:`, {
+      reply_markup: modelKeyboard(models, session.info.model),
+    });
+  });
+
+  bot.command(["reasoning", "effort"], async (ctx) => {
+    const session = getSession(ctx.chat.id);
+    if (session.busy) {
+      await ctx.reply("Cannot change reasoning effort while a task is running.");
+      return;
+    }
+    await ctx.reply(`Reasoning effort: ${session.info.reasoningEffort ?? "model default"}\n\nSelect reasoning effort for a new session:`, {
+      reply_markup: reasoningKeyboard(session.info.reasoningEffort),
+    });
   });
 
   bot.command("workspace", async (ctx) => {
@@ -199,6 +231,48 @@ export function createBot(config: AppConfig): Bot {
   bot.callbackQuery("mode:full:cancel", async (ctx) => {
     await ctx.answerCallbackQuery({ text: "Cancelled" });
     await ctx.editMessageText("Full Access was not enabled.");
+  });
+
+  bot.callbackQuery(/^model-page:(\d+)$/, async (ctx) => {
+    if (!ctx.chat) return;
+    const page = Number(ctx.match[1]);
+    const session = getSession(ctx.chat.id);
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageReplyMarkup({
+      reply_markup: modelKeyboard(listCodexModels(), session.info.model, page),
+    });
+  });
+
+  bot.callbackQuery("model-page:noop", async (ctx) => {
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery(/^model:(\d+)$/, async (ctx) => {
+    if (!ctx.chat) return;
+    const model = listCodexModels()[Number(ctx.match[1])];
+    if (!model) {
+      await ctx.answerCallbackQuery({ text: "This model is no longer available.", show_alert: true });
+      return;
+    }
+    try {
+      getSession(ctx.chat.id).reset({ model: model.slug });
+      await ctx.answerCallbackQuery({ text: `Model set to ${model.displayName}` });
+      await ctx.editMessageText(`Model: ${model.displayName} (${model.slug})\nStarted a new Codex session.`);
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
+    }
+  });
+
+  bot.callbackQuery(/^reasoning:(minimal|low|medium|high|xhigh)$/, async (ctx) => {
+    if (!ctx.chat) return;
+    const effort = ctx.match[1] as ModelReasoningEffort;
+    try {
+      getSession(ctx.chat.id).reset({ reasoningEffort: effort });
+      await ctx.answerCallbackQuery({ text: `Reasoning set to ${effort}` });
+      await ctx.editMessageText(`Reasoning effort: ${effort}\nStarted a new Codex session.`);
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
+    }
   });
 
   bot.command("stop", async (ctx) => {

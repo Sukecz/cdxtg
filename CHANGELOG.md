@@ -10,4 +10,5 @@ All notable changes to this project are documented in this file.
 - `read-only` and opt-in `workspace-write` modes;
 - commands for status, workspace selection, mode changes, new sessions, and task cancellation;
 - inline workspace selection for new sessions and optional confirmed Full Access;
+- model and reasoning-effort selection with status reporting;
 - systemd templates, tests, GitHub CI, and installation documentation.

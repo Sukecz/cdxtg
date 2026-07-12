@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
-import type { ApprovalMode, SandboxMode } from "@openai/codex-sdk";
+import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from "@openai/codex-sdk";
 
 export interface AppConfig {
   telegramBotToken: string;
   allowedUserIds: ReadonlySet<number>;
   workspaces: readonly string[];
   model?: string;
+  reasoningEffort?: ModelReasoningEffort;
   defaultMode: SafeSandboxMode;
   enableWrite: boolean;
   enableFullAccess: boolean;
@@ -36,12 +37,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const approvalPolicy = parseApprovalPolicy(env.CODEX_APPROVAL_POLICY);
   const logLevel = parseLogLevel(env.LOG_LEVEL);
   const model = optional(env.CODEX_MODEL);
+  const reasoningEffort = parseReasoningEffort(env.CODEX_REASONING_EFFORT);
 
   return {
     telegramBotToken,
     allowedUserIds,
     workspaces,
     ...(model ? { model } : {}),
+    ...(reasoningEffort ? { reasoningEffort } : {}),
     defaultMode,
     enableWrite,
     enableFullAccess,
@@ -203,6 +206,15 @@ function parseLogLevel(raw: string | undefined): LogLevel {
     throw new Error("LOG_LEVEL must be debug, info, warn, or error");
   }
   return value as LogLevel;
+}
+
+function parseReasoningEffort(raw: string | undefined): ModelReasoningEffort | undefined {
+  const value = optional(raw);
+  if (!value) return undefined;
+  if (!(["minimal", "low", "medium", "high", "xhigh"] as const).includes(value as ModelReasoningEffort)) {
+    throw new Error("CODEX_REASONING_EFFORT must be minimal, low, medium, high, or xhigh");
+  }
+  return value as ModelReasoningEffort;
 }
 
 function parseBoolean(raw: string | undefined, fallback: boolean, name: string): boolean {
