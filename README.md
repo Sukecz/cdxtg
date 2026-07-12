@@ -74,10 +74,19 @@ CODEX_WORKSPACES=/home/me/projects,/home/me/another-project
 Potom bot znovu spusťte:
 
 ```bash
-npm start
+npm run service:install
+```
+
+Tento příkaz aplikaci sestaví, vytvoří user-level systemd službu, ihned ji spustí a zapne automatický start po přihlášení nebo startu uživatelského systemd manageru. Nevyžaduje `sudo`. Stav ověříte pomocí:
+
+```bash
+npm run service:status
 ```
 
 Více ID i workspace oddělujte čárkou. První položka `CODEX_WORKSPACES` je výchozí. Cesty musí existovat a služba k nim musí mít potřebná práva.
+
+> [!NOTE]
+> `npm start` spouští bota pouze v aktuálním terminálu. Po zavření terminálu se zastaví. Pro běžnou instalaci proto použijte `npm run service:install`.
 
 ## Ovládání
 
@@ -125,24 +134,26 @@ Změna workspace nebo režimu vždy vytvoří novou Codex relaci. Režim `write`
 
 ## Běh jako systemd služba
 
-Nejdříve projekt sestavte a upravte uživatele a cesty v `deploy/cdxtg.service`:
+Pro doporučenou user-level instalaci stačí:
 
 ```bash
-npm ci
-npm run build
-sudo cp deploy/cdxtg.service /etc/systemd/system/cdxtg.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now cdxtg.service
+npm run service:install
 ```
 
 Stav a logy:
 
 ```bash
-systemctl status cdxtg --no-pager
-journalctl -u cdxtg -f
+npm run service:status
+journalctl --user -u cdxtg.service -f
 ```
 
-Služba musí běžet pod stejným uživatelem, který má funkční `codex login`, nebo musí mít bezpečně předaný `CODEX_API_KEY`. Nikdy nevkládejte token přímo do unit souboru.
+Odinstalace služby nesmaže projekt ani konfiguraci:
+
+```bash
+npm run service:uninstall
+```
+
+Služba běží pod aktuálním uživatelem, který proto musí mít funkční `codex login`. Pokročilá systémová šablona pro správce je v `deploy/cdxtg.service`. Nikdy nevkládejte token přímo do unit souboru.
 
 ## Vývoj
 

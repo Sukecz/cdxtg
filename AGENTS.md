@@ -46,3 +46,4 @@ Keep `cdxtg` a small, understandable, self-hosted Telegram bridge to the officia
 - Split Telegram output safely at its message limit and send plain text unless formatting is fully escaped.
 - Handle shutdown signals and cancel active turns cleanly.
 - Add or update tests for parsing, authorization, path selection, and message splitting.
+- Keep `npm run service:install` as the documented default installation path. It must fail safely when the allowlist is missing and must never copy secret values into the generated unit file.
