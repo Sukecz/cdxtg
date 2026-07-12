@@ -14,11 +14,12 @@
 Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  workspace
 ```
 
-## Version 0.1 features
+## Features
 
 - private access through a Telegram user ID allowlist;
 - a separate Codex session for each chat;
-- Telegram typing status while Codex is working;
+- native Telegram draft streaming in private chats, with message-edit fallback elsewhere;
+- `off`, `brief`, and `verbose` streaming modes with throttled updates;
 - automatic workspace discovery from local Codex thread history;
 - an inline workspace picker when starting a new session;
 - model and reasoning-effort pickers backed by the local Codex model cache;
@@ -108,6 +109,7 @@ Every regular text message becomes a Codex prompt.
 | `/workspace 2` | Switch to the second workspace and start a new session |
 | `/model` | Select a Codex model for a new session |
 | `/reasoning` | Select reasoning effort (`minimal` through `xhigh`) |
+| `/stream` | Select `off`, `brief`, or `verbose` streaming |
 | `/mode readonly` | Start a new read-only session |
 | `/mode write` | Start a session that may write inside the workspace |
 | `/mode full` | Confirm and start a session with full service-user access |
@@ -128,6 +130,18 @@ Changing the workspace or mode starts a fresh Codex session. Extra workspace con
 
 Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additionally requires `CODEX_ENABLE_FULL_ACCESS=true` and an explicit confirmation in Telegram. Full Access maps to Codex `danger-full-access`: it disables the filesystem sandbox and can modify anything accessible to the service user.
 
+## Streaming modes
+
+Streaming defaults to `brief` and can be changed per chat with `/stream`:
+
+- `off` keeps only the working placeholder, typing indicator, and final answer;
+- `brief` streams the emerging agent response plus compact command, file, web, tool, and plan status;
+- `verbose` additionally shows the latest bounded tool-output tail and expanded plan.
+
+In private chats, cdxtg uses Telegram's native ephemeral `sendMessageDraft` preview. Drafts are refreshed during long turns and replaced by a normal persistent final message. In groups or when drafts are unavailable, cdxtg edits one placeholder message instead. Updates are coalesced to avoid Telegram flood limits, previews are capped below Telegram's 4096-character limit, and long final answers are split safely.
+
+Raw reasoning text is never sent to Telegram. Verbose command output may contain data printed by local tools, so use it only in a trusted private chat.
+
 ## Configuration
 
 | Variable | Default | Description |
@@ -143,6 +157,7 @@ Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additio
 | `CODEX_APPROVAL_POLICY` | `never` | SDK approval policy; keep `never` for headless operation |
 | `CDXTG_ENV_FILE` | `telegram.env` | Path to the local environment file |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
+| `TELEGRAM_STREAM_MODE` | `brief` | Default streaming mode: `off`, `brief`, or `verbose` |
 
 `telegram.env`, `.env`, Codex state, logs, and other secrets are ignored by Git. Only `.env.example` with nonfunctional placeholder values belongs in the repository.
 
@@ -198,7 +213,6 @@ For production use, prefer a dedicated unprivileged account and repositories wit
 - image and document input;
 - safe delivery of generated artifacts;
 - optional webhook mode;
-- richer live tool and plan status;
 - packaged releases and a guided installer.
 
 ## License

@@ -15,6 +15,7 @@ async function main(): Promise<void> {
     { command: "workspace", description: "Select a workspace" },
     { command: "model", description: "Select a Codex model" },
     { command: "reasoning", description: "Select reasoning effort" },
+    { command: "stream", description: "Select streaming detail" },
     { command: "mode", description: "Select readonly/write mode" },
     { command: "stop", description: "Stop the running task" },
     { command: "version", description: "Show the cdxtg version" },

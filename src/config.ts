@@ -2,6 +2,7 @@ import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from "@openai/codex-sdk";
+import type { StreamMode } from "./streaming.js";
 
 export interface AppConfig {
   telegramBotToken: string;
@@ -14,6 +15,7 @@ export interface AppConfig {
   enableFullAccess: boolean;
   approvalPolicy: ApprovalMode;
   logLevel: LogLevel;
+  streamMode: StreamMode;
   envFile?: string;
 }
 
@@ -38,6 +40,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const logLevel = parseLogLevel(env.LOG_LEVEL);
   const model = optional(env.CODEX_MODEL);
   const reasoningEffort = parseReasoningEffort(env.CODEX_REASONING_EFFORT);
+  const streamMode = parseStreamMode(env.TELEGRAM_STREAM_MODE);
 
   return {
     telegramBotToken,
@@ -50,6 +53,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     enableFullAccess,
     approvalPolicy,
     logLevel,
+    streamMode,
     ...(envFile ? { envFile } : {}),
   };
 }
@@ -215,6 +219,14 @@ function parseReasoningEffort(raw: string | undefined): ModelReasoningEffort | u
     throw new Error("CODEX_REASONING_EFFORT must be minimal, low, medium, high, or xhigh");
   }
   return value as ModelReasoningEffort;
+}
+
+function parseStreamMode(raw: string | undefined): StreamMode {
+  const value = optional(raw)?.toLowerCase() ?? "brief";
+  if (value !== "off" && value !== "brief" && value !== "verbose") {
+    throw new Error("TELEGRAM_STREAM_MODE must be off, brief, or verbose");
+  }
+  return value;
 }
 
 function parseBoolean(raw: string | undefined, fallback: boolean, name: string): boolean {

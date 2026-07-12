@@ -1,10 +1,12 @@
 import { Bot, GrammyError, HttpError, type Context } from "grammy";
 import type { ModelReasoningEffort } from "@openai/codex-sdk";
 import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, type AppConfig, type SafeSandboxMode } from "./config.js";
-import { fullAccessKeyboard, modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, workspaceKeyboard } from "./bot-ui.js";
+import { fullAccessKeyboard, modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, streamModeKeyboard, workspaceKeyboard } from "./bot-ui.js";
 import { listCodexModels, listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
 import { CodexSession } from "./codex-session.js";
-import { errorMessage, splitTelegramText } from "./text.js";
+import { TelegramStreamPresenter } from "./telegram-stream.js";
+import { errorMessage } from "./text.js";
+import type { StreamMode } from "./streaming.js";
 import pkg from "../package.json" with { type: "json" };
 
 const HELP = `cdxtg commands:
@@ -17,6 +19,7 @@ const HELP = `cdxtg commands:
 /workspace 2 – switch to workspace number 2
 /model – choose a model for a new session
 /reasoning – choose reasoning effort for a new session
+/stream – choose off, brief, or verbose streaming
 /mode readonly – use read-only mode
 /mode write – use write mode (requires local opt-in)
 /mode full – use full host access (requires local opt-in and confirmation)
@@ -28,6 +31,7 @@ Send any regular text message to give Codex a task.`;
 export function createBot(config: AppConfig): Bot {
   const bot = new Bot(config.telegramBotToken);
   const sessions = new Map<number, CodexSession>();
+  const streamModes = new Map<number, StreamMode>();
   const isAllowedUser = createAllowedUserChecker(config.allowedUserIds, config.envFile);
   const getConfiguredWorkspaces = createWorkspaceProvider(config.workspaces, config.envFile);
   const getWorkspaces = (): readonly string[] => mergeWorkspaceLists(
@@ -36,6 +40,7 @@ export function createBot(config: AppConfig): Bot {
   );
   const isWriteEnabled = createBooleanSettingProvider("CODEX_ENABLE_WRITE", config.enableWrite, config.envFile);
   const isFullAccessEnabled = createBooleanSettingProvider("CODEX_ENABLE_FULL_ACCESS", config.enableFullAccess, config.envFile);
+  const getStreamMode = (chatId: number): StreamMode => streamModes.get(chatId) ?? config.streamMode;
 
   const getSession = (chatId: number): CodexSession => {
     let session = sessions.get(chatId);
@@ -94,6 +99,7 @@ export function createBot(config: AppConfig): Bot {
       `Thread: ${info.threadId ?? "new – created with the first task"}`,
       `Model: ${info.model ?? "Codex default"}`,
       `Reasoning: ${info.reasoningEffort ?? "model default"}`,
+      `Streaming: ${getStreamMode(ctx.chat.id)}`,
     ].join("\n"));
   });
 
@@ -121,6 +127,19 @@ export function createBot(config: AppConfig): Bot {
     }
     await ctx.reply(`Reasoning effort: ${session.info.reasoningEffort ?? "model default"}\n\nSelect reasoning effort for a new session:`, {
       reply_markup: reasoningKeyboard(session.info.reasoningEffort),
+    });
+  });
+
+  bot.command("stream", async (ctx) => {
+    const requested = ctx.match.trim().toLowerCase();
+    if (requested === "off" || requested === "brief" || requested === "verbose") {
+      streamModes.set(ctx.chat.id, requested);
+      await ctx.reply(`Streaming mode: ${requested}`);
+      return;
+    }
+    const current = getStreamMode(ctx.chat.id);
+    await ctx.reply(`Streaming mode: ${current}\n\nSelect how Codex progress is shown:`, {
+      reply_markup: streamModeKeyboard(current),
     });
   });
 
@@ -275,6 +294,14 @@ export function createBot(config: AppConfig): Bot {
     }
   });
 
+  bot.callbackQuery(/^stream:(off|brief|verbose)$/, async (ctx) => {
+    if (!ctx.chat) return;
+    const mode = ctx.match[1] as StreamMode;
+    streamModes.set(ctx.chat.id, mode);
+    await ctx.answerCallbackQuery({ text: `Streaming set to ${mode}` });
+    await ctx.editMessageText(`Streaming mode: ${mode}`);
+  });
+
   bot.command("stop", async (ctx) => {
     const stopped = getSession(ctx.chat.id).stop();
     await ctx.reply(stopped ? "Stopping the running task…" : "No task is running in this chat.");
@@ -284,7 +311,7 @@ export function createBot(config: AppConfig): Bot {
     const prompt = ctx.message.text.trim();
     if (!prompt || prompt.startsWith("/")) return;
     const session = getSession(ctx.chat.id);
-    await ctx.reply("Task received. Working…");
+    const presenter = new TelegramStreamPresenter(ctx, getStreamMode(ctx.chat.id));
 
     const typing = setInterval(() => {
       void ctx.replyWithChatAction("typing").catch(() => undefined);
@@ -292,13 +319,14 @@ export function createBot(config: AppConfig): Bot {
     typing.unref();
 
     try {
+      await presenter.start();
       await ctx.replyWithChatAction("typing");
-      const result = await session.run(prompt);
-      for (const chunk of splitTelegramText(result.text)) await ctx.reply(chunk);
+      const result = await session.run(prompt, (event) => presenter.onEvent(event));
+      await presenter.complete(result.text);
     } catch (error) {
       const message = errorMessage(error);
-      if (/abort/i.test(message)) await ctx.reply("The task was stopped.");
-      else await ctx.reply(`Codex could not complete the task: ${message.slice(0, 3500)}`);
+      if (/abort/i.test(message)) await presenter.fail("The task was stopped.");
+      else await presenter.fail(message.slice(0, 3500));
     } finally {
       clearInterval(typing);
     }

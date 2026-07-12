@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, workspaceButtonLabel } from "../src/bot-ui.js";
+import { modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, streamModeKeyboard, workspaceButtonLabel } from "../src/bot-ui.js";
 
 describe("workspace picker", () => {
   it("uses the directory name as a compact button label", () => {
@@ -20,5 +20,9 @@ describe("workspace picker", () => {
   it("marks selected model and reasoning options", () => {
     expect(JSON.stringify(modelKeyboard([{ slug: "a", displayName: "Model A" }], "a"))).toContain("Model A ✓");
     expect(JSON.stringify(reasoningKeyboard("high"))).toContain("high ✓");
+  });
+
+  it("marks the selected streaming mode", () => {
+    expect(JSON.stringify(streamModeKeyboard("brief"))).toContain("brief ✓");
   });
 });

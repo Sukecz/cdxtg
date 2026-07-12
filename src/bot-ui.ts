@@ -2,6 +2,7 @@ import path from "node:path";
 import { InlineKeyboard } from "grammy";
 import type { ModelReasoningEffort } from "@openai/codex-sdk";
 import type { CodexModel } from "./codex-state.js";
+import type { StreamMode } from "./streaming.js";
 
 const WORKSPACE_CALLBACK_PREFIX = "workspace:";
 const WORKSPACE_PAGE_PREFIX = "workspace-page:";
@@ -55,6 +56,14 @@ export function reasoningKeyboard(current?: ModelReasoningEffort): InlineKeyboar
   efforts.forEach((effort) => {
     keyboard.text(`${effort}${effort === current ? " ✓" : ""}`, `reasoning:${effort}`);
   });
+  return keyboard;
+}
+
+export function streamModeKeyboard(current: StreamMode): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  for (const mode of ["off", "brief", "verbose"] as const) {
+    keyboard.text(`${mode}${mode === current ? " ✓" : ""}`, `stream:${mode}`);
+  }
   return keyboard;
 }
 

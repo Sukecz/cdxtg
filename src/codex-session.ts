@@ -1,4 +1,4 @@
-import { Codex, type ApprovalMode, type ModelReasoningEffort, type SandboxMode, type Thread } from "@openai/codex-sdk";
+import { Codex, type ApprovalMode, type ModelReasoningEffort, type SandboxMode, type Thread, type ThreadEvent } from "@openai/codex-sdk";
 
 export interface SessionOptions {
   workspace: string;
@@ -45,7 +45,7 @@ export class CodexSession {
     return true;
   }
 
-  async run(prompt: string): Promise<RunResult> {
+  async run(prompt: string, onEvent?: (event: ThreadEvent) => void): Promise<RunResult> {
     if (this.busy) throw new Error("A task is already running in this chat. Wait or use /stop.");
     if (!this.thread) this.thread = this.codex.startThread(this.threadOptions());
 
@@ -56,6 +56,7 @@ export class CodexSession {
     try {
       const { events } = await this.thread.runStreamed(prompt, { signal: controller.signal });
       for await (const event of events) {
+        onEvent?.(event);
         if (event.type === "thread.started") this.currentThreadId = event.thread_id;
         if (event.type === "item.completed" && event.item.type === "agent_message") {
           text = event.item.text;
