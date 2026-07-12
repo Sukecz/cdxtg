@@ -17,8 +17,8 @@ const HELP = `cdxtg commands:
 /status – show the current session
 /workspace – list allowed workspaces
 /workspace 2 – switch to workspace number 2
-/model – choose a model for a new session
-/reasoning – choose reasoning effort for a new session
+/model – choose a model, then reasoning effort, for a new session
+/reasoning – change only the reasoning effort for a new session
 /stream – choose off, brief, or verbose streaming
 /mode readonly – use read-only mode
 /mode write – use write mode (requires local opt-in)
@@ -32,6 +32,7 @@ export function createBot(config: AppConfig): Bot {
   const bot = new Bot(config.telegramBotToken);
   const sessions = new Map<number, CodexSession>();
   const streamModes = new Map<number, StreamMode>();
+  const pendingModels = new Map<number, { slug: string; displayName: string }>();
   const isAllowedUser = createAllowedUserChecker(config.allowedUserIds, config.envFile);
   const getConfiguredWorkspaces = createWorkspaceProvider(config.workspaces, config.envFile);
   const getWorkspaces = (): readonly string[] => mergeWorkspaceLists(
@@ -114,6 +115,7 @@ export function createBot(config: AppConfig): Bot {
       await ctx.reply("No models were found in the local Codex model cache.");
       return;
     }
+    pendingModels.delete(ctx.chat.id);
     await ctx.reply(`Current model: ${session.info.model ?? "Codex default"}\n\nSelect a model for a new session:`, {
       reply_markup: modelKeyboard(models, session.info.model),
     });
@@ -125,6 +127,7 @@ export function createBot(config: AppConfig): Bot {
       await ctx.reply("Cannot change reasoning effort while a task is running.");
       return;
     }
+    pendingModels.delete(ctx.chat.id);
     await ctx.reply(`Reasoning effort: ${session.info.reasoningEffort ?? "model default"}\n\nSelect reasoning effort for a new session:`, {
       reply_markup: reasoningKeyboard(session.info.reasoningEffort),
     });
@@ -274,9 +277,12 @@ export function createBot(config: AppConfig): Bot {
       return;
     }
     try {
-      getSession(ctx.chat.id).reset({ model: model.slug });
-      await ctx.answerCallbackQuery({ text: `Model set to ${model.displayName}` });
-      await ctx.editMessageText(`Model: ${model.displayName} (${model.slug})\nStarted a new Codex session.`);
+      pendingModels.set(ctx.chat.id, model);
+      await ctx.answerCallbackQuery({ text: `Model selected: ${model.displayName}` });
+      await ctx.editMessageText(
+        `Model: ${model.displayName} (${model.slug})\n\nNow select reasoning effort:`,
+        { reply_markup: reasoningKeyboard(getSession(ctx.chat.id).info.reasoningEffort) },
+      );
     } catch (error) {
       await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
     }
@@ -286,9 +292,18 @@ export function createBot(config: AppConfig): Bot {
     if (!ctx.chat) return;
     const effort = ctx.match[1] as ModelReasoningEffort;
     try {
-      getSession(ctx.chat.id).reset({ reasoningEffort: effort });
+      const pendingModel = pendingModels.get(ctx.chat.id);
+      getSession(ctx.chat.id).reset({
+        ...(pendingModel ? { model: pendingModel.slug } : {}),
+        reasoningEffort: effort,
+      });
+      pendingModels.delete(ctx.chat.id);
       await ctx.answerCallbackQuery({ text: `Reasoning set to ${effort}` });
-      await ctx.editMessageText(`Reasoning effort: ${effort}\nStarted a new Codex session.`);
+      await ctx.editMessageText([
+        ...(pendingModel ? [`Model: ${pendingModel.displayName} (${pendingModel.slug})`] : []),
+        `Reasoning effort: ${effort}`,
+        "Started a new Codex session.",
+      ].join("\n"));
     } catch (error) {
       await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
     }

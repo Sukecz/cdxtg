@@ -107,8 +107,8 @@ Every regular text message becomes a Codex prompt.
 | `/status` | Show workspace, mode, state, model, and Codex thread ID |
 | `/workspace` | Open the workspace picker |
 | `/workspace 2` | Switch to the second workspace and start a new session |
-| `/model` | Select a Codex model for a new session |
-| `/reasoning` | Select reasoning effort (`minimal` through `xhigh`) |
+| `/model` | Select a Codex model, then its reasoning effort, in one flow |
+| `/reasoning` | Change only the reasoning effort (`minimal` through `xhigh`) |
 | `/stream` | Select `off`, `brief`, or `verbose` streaming |
 | `/mode readonly` | Start a new read-only session |
 | `/mode write` | Start a session that may write inside the workspace |
