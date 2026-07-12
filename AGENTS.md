@@ -47,3 +47,4 @@ Keep `cdxtg` a small, understandable, self-hosted Telegram bridge to the officia
 - Handle shutdown signals and cancel active turns cleanly.
 - Add or update tests for parsing, authorization, path selection, and message splitting.
 - Keep `npm run service:install` as the documented default installation path. It must fail safely when the allowlist is missing and must never copy secret values into the generated unit file.
+- Keep `.env.example` as the committed blank template. `npm run setup` may create an ignored `telegram.env`, but it must never overwrite an existing file.

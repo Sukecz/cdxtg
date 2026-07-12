@@ -47,11 +47,10 @@ codex login status
 git clone https://github.com/YOUR_ACCOUNT/cdxtg.git
 cd cdxtg
 npm ci
-cp .env.example telegram.env
-chmod 600 telegram.env
+npm run setup
 ```
 
-Do `telegram.env` vložte token od BotFather:
+Příkaz vytvoří `telegram.env` ze zveřejnitelné šablony `.env.example`, nastaví práva `0600` a nikdy nepřepíše existující konfiguraci. Do souboru vložte token od BotFather:
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=123456:replace_me

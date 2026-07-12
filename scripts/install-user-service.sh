@@ -13,7 +13,8 @@ if [[ -z "${NODE_BIN}" ]]; then
 fi
 
 if [[ ! -f "${ENV_FILE}" ]]; then
-  echo "Chyba: chybí ${ENV_FILE}. Zkopírujte .env.example jako telegram.env a doplňte konfiguraci." >&2
+  CDXTG_ENV_FILE="${ENV_FILE}" bash "${PROJECT_DIR}/scripts/setup-env.sh"
+  echo "Instalace zatím nepokračuje. Doplňte vytvořenou konfiguraci a spusťte tento příkaz znovu." >&2
   exit 1
 fi
 
