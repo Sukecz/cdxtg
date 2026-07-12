@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readFileSync, realpathSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 import type { ApprovalMode, ModelReasoningEffort, SandboxMode } from "@openai/codex-sdk";
@@ -79,24 +79,6 @@ export function createAllowedUserChecker(
     refresh();
     return allowedIds.has(userId);
   };
-}
-
-export function persistAllowedUser(envFile: string, userId: number): void {
-  const contents = readFileSync(envFile, "utf8");
-  const values = parseEnv(contents);
-  const ids = new Set(parseNumericList(values.TELEGRAM_ALLOWED_USER_IDS));
-  ids.add(userId);
-  const replacement = `TELEGRAM_ALLOWED_USER_IDS=${[...ids].join(",")}`;
-  const pattern = /^[ \t]*(?:export[ \t]+)?TELEGRAM_ALLOWED_USER_IDS[ \t]*=.*$/m;
-  const updated = pattern.test(contents)
-    ? contents.replace(pattern, replacement)
-    : `${contents.trimEnd()}\n${replacement}\n`;
-  const temporary = `${envFile}.tmp-${process.pid}`;
-
-  writeFileSync(temporary, updated, { mode: 0o600 });
-  chmodSync(temporary, 0o600);
-  renameSync(temporary, envFile);
-  chmodSync(envFile, 0o600);
 }
 
 export function createWorkspaceProvider(

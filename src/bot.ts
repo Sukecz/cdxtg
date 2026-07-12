@@ -1,7 +1,6 @@
 import { Bot, GrammyError, HttpError, type Context } from "grammy";
 import type { ModelReasoningEffort } from "@openai/codex-sdk";
-import { timingSafeEqual } from "node:crypto";
-import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, persistAllowedUser, type AppConfig, type SafeSandboxMode } from "./config.js";
+import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, type AppConfig, type SafeSandboxMode } from "./config.js";
 import { fullAccessKeyboard, modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, workspaceKeyboard } from "./bot-ui.js";
 import { listCodexModels, listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
 import { CodexSession } from "./codex-session.js";
@@ -12,7 +11,6 @@ const HELP = `cdxtg commands:
 /start – welcome and access status
 /help – show this command reference
 /id – show your Telegram user ID and chat ID
-/pair CODE – securely authorize the first Telegram user
 /new – choose a workspace and start a new Codex session
 /status – show the current session
 /workspace – list allowed workspaces
@@ -27,9 +25,8 @@ const HELP = `cdxtg commands:
 
 Send any regular text message to give Codex a task.`;
 
-export function createBot(config: AppConfig, initialPairingCode?: string): Bot {
+export function createBot(config: AppConfig): Bot {
   const bot = new Bot(config.telegramBotToken);
-  let pairingCode = initialPairingCode;
   const sessions = new Map<number, CodexSession>();
   const isAllowedUser = createAllowedUserChecker(config.allowedUserIds, config.envFile);
   const getConfiguredWorkspaces = createWorkspaceProvider(config.workspaces, config.envFile);
@@ -61,7 +58,7 @@ export function createBot(config: AppConfig, initialPairingCode?: string): Bot {
   };
 
   bot.use(async (ctx, next) => {
-    if (isCommand(ctx.message?.text, "id") || isCommand(ctx.message?.text, "pair")) return next();
+    if (ctx.message?.text?.startsWith("/id")) return next();
     if (!authorized(ctx)) {
       const id = ctx.from?.id ?? "unknown";
       await ctx.reply(`Access denied. Your Telegram user ID is ${id}. Add it locally to TELEGRAM_ALLOWED_USER_IDS.`);
@@ -72,34 +69,6 @@ export function createBot(config: AppConfig, initialPairingCode?: string): Bot {
 
   bot.command("id", async (ctx) => {
     await ctx.reply(`Telegram user ID: ${ctx.from?.id ?? "unknown"}\nChat ID: ${ctx.chat.id}`);
-  });
-
-  bot.command("pair", async (ctx) => {
-    if (!pairingCode || !config.envFile) {
-      await ctx.reply("Pairing is not available. This bot may already have an authorized user.");
-      return;
-    }
-    if (!ctx.from) {
-      await ctx.reply("Pairing requires a Telegram user identity.");
-      return;
-    }
-    if (ctx.chat.type !== "private" || ctx.chat.id !== ctx.from.id) {
-      await ctx.reply("Pairing is available only in a private chat with the bot.");
-      return;
-    }
-    const suppliedCode = ctx.match.trim().toUpperCase();
-    if (!secureCodeMatch(suppliedCode, pairingCode)) {
-      await ctx.reply("Invalid pairing code.");
-      return;
-    }
-
-    try {
-      persistAllowedUser(config.envFile, ctx.from.id);
-      pairingCode = undefined;
-      await ctx.reply("Pairing complete. Your Telegram account is now authorized.");
-    } catch (error) {
-      await ctx.reply(`Pairing failed: ${errorMessage(error)}`);
-    }
   });
 
   bot.command("start", async (ctx) => {
@@ -346,14 +315,4 @@ export function createBot(config: AppConfig, initialPairingCode?: string): Bot {
 
 function displayVersion(): string {
   return pkg.version.replace(/\.0$/, "");
-}
-
-function isCommand(text: string | undefined, command: string): boolean {
-  return new RegExp(`^/${command}(?:@[A-Za-z0-9_]+)?(?:\\s|$)`, "i").test(text ?? "");
-}
-
-function secureCodeMatch(supplied: string, expected: string): boolean {
-  const suppliedBuffer = Buffer.from(supplied);
-  const expectedBuffer = Buffer.from(expected);
-  return suppliedBuffer.length === expectedBuffer.length && timingSafeEqual(suppliedBuffer, expectedBuffer);
 }

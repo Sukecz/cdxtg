@@ -18,6 +18,11 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
+if ! grep -Eq '^[[:space:]]*TELEGRAM_ALLOWED_USER_IDS[[:space:]]*=[[:space:]]*[0-9]' "${ENV_FILE}"; then
+  echo "Error: TELEGRAM_ALLOWED_USER_IDS is not configured. Discover your ID with /id and add it to telegram.env first." >&2
+  exit 1
+fi
+
 echo "Building cdxtg…"
 npm --prefix "${PROJECT_DIR}" run build
 
@@ -41,7 +46,6 @@ umask 077
   echo 'PrivateTmp=true'
   echo 'ProtectSystem=strict'
   echo 'ProtectHome=read-only'
-  printf 'ReadWritePaths="%s"\n' "${ENV_FILE}"
   echo 'RestrictSUIDSGID=true'
   echo 'LockPersonality=true'
   echo 'RestrictRealtime=true'

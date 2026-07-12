@@ -21,7 +21,6 @@ PrivateTmp=true
 PrivateDevices=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/etc/cdxtg/telegram.env
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
