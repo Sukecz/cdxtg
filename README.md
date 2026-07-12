@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="assets/logo.png" alt="cdxtg logo" width="180">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/darkbackgroundlogo.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/lightbackgroundlogo.png">
+    <img src="assets/lightbackgroundlogo.png" alt="cdxtg logo" width="360">
+  </picture>
 </p>
 
 <h1 align="center">cdxtg</h1>
