@@ -1,0 +1,27 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+telegram.env
+*.pem
+*.key
+
+# Codex and runtime state
+.codex/
+.cdxtg/
+*.log
+logs/
+
+# Local design research (input material, not a distribution artifact)
+zprava-hluboky-vyzkum*.md
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/

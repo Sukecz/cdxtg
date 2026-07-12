@@ -1,0 +1,33 @@
+[Unit]
+Description=cdxtg - Telegram control for Codex
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=CHANGE_ME
+Group=CHANGE_ME
+WorkingDirectory=/opt/cdxtg
+Environment=NODE_ENV=production
+Environment=CDXTG_ENV_FILE=/etc/cdxtg/telegram.env
+ExecStart=/usr/bin/node /opt/cdxtg/dist/src/index.js
+Restart=on-failure
+RestartSec=5
+
+# Baseline hardening. ProtectHome is intentionally read-only because Codex auth
+# and configured workspaces commonly live below the service user's home.
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target
