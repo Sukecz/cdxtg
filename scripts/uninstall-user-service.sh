@@ -9,4 +9,4 @@ rm -f -- "${UNIT_FILE}"
 systemctl --user daemon-reload
 systemctl --user reset-failed cdxtg.service 2>/dev/null || true
 
-echo "User služba cdxtg byla odebrána. Projekt ani telegram.env nebyly smazány."
+echo "The cdxtg user service was removed. The project and telegram.env were not deleted."

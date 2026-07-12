@@ -4,6 +4,8 @@
 
 Keep `cdxtg` a small, understandable, self-hosted Telegram bridge to the official Codex SDK. Prefer a focused dependency and feature set over queues, databases, containers, dashboards, or orchestration until a concrete requirement justifies them.
 
+All public project content must be written in English, including bot messages, documentation, examples, scripts, logs, tests, release notes, and GitHub metadata.
+
 ## Safety
 
 - Never commit or print bot tokens, API keys, Codex auth files, Telegram IDs, private paths, or user content.
@@ -48,3 +50,4 @@ Keep `cdxtg` a small, understandable, self-hosted Telegram bridge to the officia
 - Add or update tests for parsing, authorization, path selection, and message splitting.
 - Keep `npm run service:install` as the documented default installation path. It must fail safely when the allowlist is missing and must never copy secret values into the generated unit file.
 - Keep `.env.example` as the committed blank template. `npm run setup` may create an ignored `telegram.env`, but it must never overwrite an existing file.
+- Keep Telegram allowlist hot reload working so the first authorized user can move from `/id` to normal prompts without restarting the bot.

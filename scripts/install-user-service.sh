@@ -8,22 +8,22 @@ UNIT_FILE="${UNIT_DIR}/cdxtg.service"
 NODE_BIN="$(command -v node || true)"
 
 if [[ -z "${NODE_BIN}" ]]; then
-  echo "Chyba: Node.js nebyl nalezen v PATH." >&2
+  echo "Error: Node.js was not found in PATH." >&2
   exit 1
 fi
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   CDXTG_ENV_FILE="${ENV_FILE}" bash "${PROJECT_DIR}/scripts/setup-env.sh"
-  echo "Instalace zatím nepokračuje. Doplňte vytvořenou konfiguraci a spusťte tento příkaz znovu." >&2
+  echo "Installation stopped. Complete the generated configuration and run this command again." >&2
   exit 1
 fi
 
 if ! grep -Eq '^[[:space:]]*TELEGRAM_ALLOWED_USER_IDS[[:space:]]*=[[:space:]]*[0-9]' "${ENV_FILE}"; then
-  echo "Chyba: TELEGRAM_ALLOWED_USER_IDS není nastaveno. Nejdřív zjistěte ID přes /id a doplňte ho do telegram.env." >&2
+  echo "Error: TELEGRAM_ALLOWED_USER_IDS is not configured. Discover your ID with /id and add it to telegram.env first." >&2
   exit 1
 fi
 
-echo "Sestavuji cdxtg…"
+echo "Building cdxtg…"
 npm --prefix "${PROJECT_DIR}" run build
 
 mkdir -p "${UNIT_DIR}"
@@ -44,13 +44,8 @@ umask 077
   echo 'RestartSec=5'
   echo 'NoNewPrivileges=true'
   echo 'PrivateTmp=true'
-  echo 'PrivateDevices=true'
   echo 'ProtectSystem=strict'
   echo 'ProtectHome=read-only'
-  echo 'ProtectKernelTunables=true'
-  echo 'ProtectKernelModules=true'
-  echo 'ProtectControlGroups=true'
-  echo 'ProtectKernelLogs=true'
   echo 'RestrictSUIDSGID=true'
   echo 'LockPersonality=true'
   echo 'RestrictRealtime=true'
@@ -63,5 +58,5 @@ systemctl --user daemon-reload
 systemctl --user enable cdxtg.service
 systemctl --user restart cdxtg.service
 
-echo "cdxtg je nainstalován, spuštěn a zapnut pro automatický start."
+echo "cdxtg is installed, running, and enabled for automatic startup."
 systemctl --user status cdxtg.service --no-pager --lines=5

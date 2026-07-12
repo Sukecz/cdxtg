@@ -1,4 +1,4 @@
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import path from "node:path";
 import { config as loadDotenv } from "dotenv";
 import type { ApprovalMode, SandboxMode } from "@openai/codex-sdk";
@@ -12,15 +12,17 @@ export interface AppConfig {
   enableWrite: boolean;
   approvalPolicy: ApprovalMode;
   logLevel: LogLevel;
+  envFile?: string;
 }
 
 export type SafeSandboxMode = Extract<SandboxMode, "read-only" | "workspace-write">;
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
+  let envFile: string | undefined;
   if (env === process.env) {
-    const envFile = env.CDXTG_ENV_FILE?.trim() || "telegram.env";
-    loadDotenv({ path: path.resolve(envFile), quiet: true });
+    envFile = path.resolve(env.CDXTG_ENV_FILE?.trim() || "telegram.env");
+    loadDotenv({ path: envFile, quiet: true });
     loadDotenv({ path: path.resolve(".env"), quiet: true, override: false });
   }
 
@@ -42,7 +44,52 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     enableWrite,
     approvalPolicy,
     logLevel,
+    ...(envFile ? { envFile } : {}),
   };
+}
+
+export function createAllowedUserChecker(
+  initialIds: ReadonlySet<number>,
+  envFile?: string,
+  reportError: (message: string) => void = console.warn,
+): (userId: number) => boolean {
+  let allowedIds = new Set(initialIds);
+  let lastModified = -1;
+
+  const refresh = (): void => {
+    if (!envFile) return;
+    try {
+      const modified = statSync(envFile).mtimeMs;
+      if (modified === lastModified) return;
+      const values = parseEnv(readFileSync(envFile, "utf8"));
+      allowedIds = new Set(parseNumericList(values.TELEGRAM_ALLOWED_USER_IDS));
+      lastModified = modified;
+    } catch (error) {
+      reportError(`Could not reload TELEGRAM_ALLOWED_USER_IDS: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  return (userId: number): boolean => {
+    refresh();
+    return allowedIds.has(userId);
+  };
+}
+
+function parseEnv(contents: string): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const rawLine of contents.split(/\r?\n/)) {
+    const line = rawLine.trim().replace(/^export\s+/, "");
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    if (separator < 1) continue;
+    const key = line.slice(0, separator).trim();
+    let value = line.slice(separator + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    values[key] = value;
+  }
+  return values;
 }
 
 export function parseNumericList(raw: string | undefined): number[] {

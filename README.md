@@ -4,36 +4,36 @@
 
 <h1 align="center">cdxtg</h1>
 
-<p align="center"><strong>Lehké a bezpečné ovládání lokálního Codexu přes Telegram.</strong></p>
+<p align="center"><strong>Lightweight, secure control of local Codex through Telegram.</strong></p>
 
-`cdxtg` propojí soukromého Telegram bota s Codexem běžícím na vašem počítači nebo serveru. Z telefonu můžete zadávat úkoly, pokračovat v konverzaci, přepínat pracovní složky a zastavit právě běžící úlohu. Zdrojové kódy i přihlášení ke Codexu zůstávají na vašem stroji.
+`cdxtg` connects a private Telegram bot to Codex running on your computer or server. Start coding tasks, continue conversations, switch workspaces, and stop active tasks from your phone. Your source code and Codex authentication stay on your machine.
 
 ```text
 Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  workspace
 ```
 
-## Co umí verze 0.1
+## Version 0.1 features
 
-- soukromý přístup pomocí allowlistu Telegram user ID;
-- samostatná Codex relace pro každý chat;
-- průběžný Telegram indikátor „píše…“ během práce;
-- více předem povolených pracovních složek;
-- bezpečný `read-only` a zapisovací `workspace-write` režim;
-- zastavení běžící úlohy;
-- přímé napojení přes oficiální TypeScript SDK bez parsování výstupu CLI;
-- long polling bez veřejné domény, webhooku, databáze nebo další infrastruktury.
+- private access through a Telegram user ID allowlist;
+- a separate Codex session for each chat;
+- Telegram typing status while Codex is working;
+- multiple preconfigured workspaces;
+- safe `read-only` and opt-in `workspace-write` modes;
+- cancellation of active tasks;
+- direct integration through the official TypeScript SDK without parsing CLI output;
+- long polling with no public domain, webhook, database, or extra infrastructure.
 
 > [!WARNING]
-> Bot dokáže spouštět coding agenta na vašem stroji. Používejte ho jen v soukromém chatu, nastavte allowlist a nezačínejte s režimem `workspace-write`, dokud nerozumíte jeho dopadům.
+> This bot can run a coding agent on your machine. Use it only in a private chat, configure the allowlist, and do not enable `workspace-write` until you understand its impact.
 
-## Požadavky
+## Requirements
 
-- Linux nebo macOS;
-- Node.js 22 nebo novější;
-- nainstalovaný a přihlášený [Codex CLI](https://developers.openai.com/codex/cli/);
-- Telegram bot vytvořený přes [@BotFather](https://t.me/BotFather).
+- Linux or macOS;
+- Node.js 22 or newer;
+- [Codex CLI](https://developers.openai.com/codex/cli/) installed and authenticated;
+- a Telegram bot created with [@BotFather](https://t.me/BotFather).
 
-Ověření prostředí:
+Check your environment:
 
 ```bash
 node --version
@@ -41,7 +41,7 @@ codex --version
 codex login status
 ```
 
-## Rychlá instalace
+## Quick installation
 
 ```bash
 git clone https://github.com/YOUR_ACCOUNT/cdxtg.git
@@ -50,111 +50,112 @@ npm ci
 npm run setup
 ```
 
-Příkaz vytvoří `telegram.env` ze zveřejnitelné šablony `.env.example`, nastaví práva `0600` a nikdy nepřepíše existující konfiguraci. Do souboru vložte token od BotFather:
+`npm run setup` creates an ignored `telegram.env` from `.env.example`, sets permissions to `0600`, and never overwrites an existing configuration. Add the token received from BotFather:
 
 ```dotenv
 TELEGRAM_BOT_TOKEN=123456:replace_me
+TELEGRAM_ALLOWED_USER_IDS=
 ```
 
-Při prvním spuštění zatím nenastavujte allowlist:
+Start the bot temporarily to discover your Telegram ID:
 
 ```bash
 npm run build
 npm start
 ```
 
-Napište botovi `/id`. Bot zobrazí vaše číselné Telegram user ID, ale bez allowlistu nepřijme žádný Codex úkol. Proces ukončete pomocí `Ctrl+C`, doplňte ID a nastavte workspace:
+Send `/id` to the bot. It will show your numeric Telegram user ID but will not accept Codex tasks yet. Add the ID to `telegram.env`:
 
 ```dotenv
 TELEGRAM_ALLOWED_USER_IDS=123456789
 CODEX_WORKSPACES=/home/me/projects,/home/me/another-project
 ```
 
-Potom bot znovu spusťte:
+The running bot hot-reloads `TELEGRAM_ALLOWED_USER_IDS`; your next message is accepted without a restart. Press `Ctrl+C` after testing, then install the persistent service:
 
 ```bash
 npm run service:install
 ```
 
-Tento příkaz aplikaci sestaví, vytvoří user-level systemd službu, ihned ji spustí a zapne automatický start po přihlášení nebo startu uživatelského systemd manageru. Nevyžaduje `sudo`. Stav ověříte pomocí:
+This command builds the app, creates a user-level systemd service, starts it immediately, and enables automatic startup. It does not require `sudo`.
 
 ```bash
 npm run service:status
 ```
 
-Více ID i workspace oddělujte čárkou. První položka `CODEX_WORKSPACES` je výchozí. Cesty musí existovat a služba k nim musí mít potřebná práva.
+Separate multiple IDs or workspaces with commas. The first `CODEX_WORKSPACES` entry is the default. Every configured path must exist and be accessible to the service user.
 
 > [!NOTE]
-> `npm start` spouští bota pouze v aktuálním terminálu. Po zavření terminálu se zastaví. Pro běžnou instalaci proto použijte `npm run service:install`.
+> `npm start` runs the bot only in the current terminal. Use `npm run service:install` for a persistent installation.
 
-## Ovládání
+## Telegram commands
 
-Každá obyčejná textová zpráva je prompt pro Codex. Příkazy:
+Every regular text message becomes a Codex prompt.
 
-| Příkaz | Funkce |
+| Command | Description |
 |---|---|
-| `/start` | Uvítání a rychlý stav konfigurace |
-| `/help` | Přehled příkazů |
-| `/id` | Zobrazí vaše Telegram user ID a chat ID |
-| `/new` | Zahodí aktuální relaci a začne novou |
-| `/status` | Workspace, režim, stav a ID Codex vlákna |
-| `/workspace` | Vypíše povolené pracovní složky |
-| `/workspace 2` | Přepne na druhou povolenou složku a založí novou relaci |
-| `/mode readonly` | Nová relace pouze pro čtení |
-| `/mode write` | Nová relace smí zapisovat uvnitř workspace |
-| `/stop` | Zastaví právě běžící úlohu |
-| `/version` | Verze služby |
+| `/start` | Welcome message and access status |
+| `/help` | Command reference |
+| `/id` | Show your Telegram user ID and chat ID |
+| `/new` | Discard the current session and start a new one |
+| `/status` | Show workspace, mode, state, model, and Codex thread ID |
+| `/workspace` | List allowed workspaces |
+| `/workspace 2` | Switch to the second workspace and start a new session |
+| `/mode readonly` | Start a new read-only session |
+| `/mode write` | Start a session that may write inside the workspace |
+| `/stop` | Stop the active task |
+| `/version` | Show the cdxtg version |
 
-Příklady zpráv:
+Example prompts:
 
 ```text
-Shrň mi strukturu tohoto projektu a najdi riziková místa.
-Spusť testy, vysvětli chyby a navrhni opravu.
-Přidej validaci formuláře a ověř ji testem.
+Summarize this project's structure and identify risky areas.
+Run the tests, explain the failures, and propose a fix.
+Add form validation and verify it with a test.
 ```
 
-Změna workspace nebo režimu vždy vytvoří novou Codex relaci. Režim `write` je dostupný pouze tehdy, když je v konfiguraci `CODEX_ENABLE_WRITE=true`.
+Changing the workspace or mode starts a fresh Codex session. Write mode is available only when `CODEX_ENABLE_WRITE=true` is configured locally.
 
-## Konfigurace
+## Configuration
 
-| Proměnná | Výchozí hodnota | Popis |
+| Variable | Default | Description |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | povinná | Token od BotFather |
-| `TELEGRAM_ALLOWED_USER_IDS` | prázdná | Povolená Telegram user ID oddělená čárkou |
-| `CODEX_WORKSPACES` | aktuální složka | Přesný seznam povolených pracovních složek |
-| `CODEX_MODEL` | výchozí Codex model | Volitelný model předaný SDK |
-| `CODEX_DEFAULT_MODE` | `read-only` | `read-only` nebo `workspace-write` |
-| `CODEX_ENABLE_WRITE` | `false` | Povolí přepnutí do zapisovacího režimu |
-| `CODEX_APPROVAL_POLICY` | `never` | Approval policy SDK; pro headless provoz ponechte `never` |
-| `CDXTG_ENV_FILE` | `telegram.env` | Cesta k env souboru |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` nebo `error` |
+| `TELEGRAM_BOT_TOKEN` | required | Token received from BotFather |
+| `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated numeric Telegram user IDs; hot-reloaded at runtime |
+| `CODEX_WORKSPACES` | current directory | Exact comma-separated workspace allowlist |
+| `CODEX_MODEL` | Codex default | Optional model passed to the SDK |
+| `CODEX_DEFAULT_MODE` | `read-only` | `read-only` or `workspace-write` |
+| `CODEX_ENABLE_WRITE` | `false` | Enables switching to write mode |
+| `CODEX_APPROVAL_POLICY` | `never` | SDK approval policy; keep `never` for headless operation |
+| `CDXTG_ENV_FILE` | `telegram.env` | Path to the local environment file |
+| `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
 
-`telegram.env`, `.env`, stav Codexu, logy i jiné secrets jsou ignorované Gitem. Do repozitáře patří pouze `.env.example` s neplatnými ukázkovými hodnotami.
+`telegram.env`, `.env`, Codex state, logs, and other secrets are ignored by Git. Only `.env.example` with nonfunctional placeholder values belongs in the repository.
 
-## Běh jako systemd služba
+## Persistent systemd service
 
-Pro doporučenou user-level instalaci stačí:
+Install or update the recommended user-level service:
 
 ```bash
 npm run service:install
 ```
 
-Stav a logy:
+Check status and follow logs:
 
 ```bash
 npm run service:status
 journalctl --user -u cdxtg.service -f
 ```
 
-Odinstalace služby nesmaže projekt ani konfiguraci:
+Remove only the service, without deleting the project or configuration:
 
 ```bash
 npm run service:uninstall
 ```
 
-Služba běží pod aktuálním uživatelem, který proto musí mít funkční `codex login`. Pokročilá systémová šablona pro správce je v `deploy/cdxtg.service`. Nikdy nevkládejte token přímo do unit souboru.
+The service runs as the current user, who must have a working `codex login`. An advanced system-level template is available at `deploy/cdxtg.service`. Never place secrets directly in a unit file.
 
-## Vývoj
+## Development
 
 ```bash
 npm install
@@ -164,38 +165,38 @@ npm test
 npm run build
 ```
 
-Projekt používá SemVer technicky jako `0.1.0`, ale veřejné funkční verze postupují po větších krocích `0.1`, `0.2`, `0.3`, `1.0`, `1.1` — bez drobných release čísel typu `0.1.1`.
+The package uses SemVer syntax such as `0.1.0`, while public feature releases advance as `0.1`, `0.2`, `0.3`, `1.0`, `1.1`, and so on. The project does not publish small patch-number releases such as `0.1.1`.
 
-## Bezpečnostní hranice
+## Security boundaries
 
-- Telegram text se nikdy neskládá do shellového příkazu; posílá se jako vstup oficiálnímu Codex SDK.
-- Neautorizovaný uživatel dostane jen své vlastní Telegram ID a žádný přístup ke Codexu.
-- Workspace lze vybrat pouze z lokálně nakonfigurovaného seznamu.
-- `danger-full-access` z Telegramu není podporován.
-- Výchozí režim je pouze pro čtení; zápis vyžaduje lokální opt-in.
-- Bot nepřidává další síťová nebo systémová oprávnění nad možnosti účtu, pod kterým běží.
+- Telegram text is passed to the official Codex SDK as input and is never interpolated into a shell command.
+- Unauthorized users receive only their own Telegram ID and no Codex access.
+- A workspace can be selected only from the locally configured exact allowlist.
+- `danger-full-access` is not exposed through Telegram.
+- Read-only mode is the default; write mode requires a local opt-in.
+- The bot does not add network or system privileges beyond those of its service account.
 
-Pro produkční použití doporučujeme samostatný neprivilegovaný účet a repozitáře bez produkčních secrets. `cdxtg` je vzdálené ovládání agenta, nikoli bezpečnostní sandbox samo o sobě.
+For production use, prefer a dedicated unprivileged account and repositories without production secrets. `cdxtg` is a remote control surface for an agent, not a security sandbox by itself.
 
-## Proč SDK a ne app-server?
+## Why the SDK instead of app-server?
 
-Codex nabízí dvě relevantní integrační vrstvy:
+Codex provides two relevant integration layers:
 
-- [Codex SDK](https://developers.openai.com/codex/codex-sdk/) je oficiální knihovna pro programové řízení lokálních Codex agentů a coding vláken. Pro malé `cdxtg` poskytuje potřebné relace, streamované eventy, sandbox a rušení úloh s minimem vlastního protokolu.
-- [Codex app-server](https://developers.openai.com/codex/app-server/) je nízkoúrovňové JSON-RPC rozhraní pro hluboké klientské integrace. Navíc nabízí například historii, interaktivní approvals, přihlášení, seznam modelů a detailní produktové události.
+- [Codex SDK](https://developers.openai.com/codex/codex-sdk/) is the official library for programmatically controlling local Codex agents and coding threads. It gives this small project sessions, streamed events, sandbox selection, and cancellation without implementing a protocol client.
+- [Codex app-server](https://developers.openai.com/codex/app-server/) is a lower-level JSON-RPC interface for deep client integrations. It additionally exposes conversation history, interactive approvals, authentication, model discovery, and detailed product events.
 
-Verze 0.1 používá SDK, protože je lehčí a odpovídá současnému rozsahu. Integrace je uzavřena za `CodexSession`, takže lze backend později vyměnit za lokální app-server přes `stdio` nebo Unix socket bez přepisu Telegram vrstvy. App-server WebSocket není vhodné vystavovat na internet; jeho dokumentace jej aktuálně označuje jako experimentální a unsupported.
+Version 0.1 uses the SDK because it matches the current scope with less code. The integration is isolated behind `CodexSession`, allowing a future app-server backend over local `stdio` or a Unix socket without rewriting the Telegram layer. App-server WebSocket transport should not be exposed publicly and is currently documented as experimental and unsupported.
 
-## Roadmapa
+## Roadmap
 
-- volitelný app-server backend pro historii, approvals a přihlášení;
-- perzistence a obnovení relací po restartu;
-- obrázky a dokumenty jako vstup;
-- bezpečné odesílání vytvořených artefaktů;
-- volitelný webhook režim;
-- lepší průběžné statusy nástrojů a plánů;
-- balíček a instalační průvodce.
+- optional app-server backend for history, approvals, and authentication;
+- session persistence and restart recovery;
+- image and document input;
+- safe delivery of generated artifacts;
+- optional webhook mode;
+- richer live tool and plan status;
+- packaged releases and a guided installer.
 
-## Licence
+## License
 
 [MIT](LICENSE)

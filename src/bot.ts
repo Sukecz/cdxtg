@@ -1,27 +1,28 @@
 import { Bot, GrammyError, HttpError, type Context } from "grammy";
-import type { AppConfig, SafeSandboxMode } from "./config.js";
+import { createAllowedUserChecker, type AppConfig, type SafeSandboxMode } from "./config.js";
 import { CodexSession } from "./codex-session.js";
 import { errorMessage, splitTelegramText } from "./text.js";
 import pkg from "../package.json" with { type: "json" };
 
-const HELP = `Příkazy cdxtg:
-/start – úvod a stav přístupu
-/help – tento přehled
-/id – vaše Telegram user ID a chat ID
-/new – nová Codex relace
-/status – stav relace
-/workspace – povolené pracovní složky
-/workspace 2 – přepnutí na workspace č. 2
-/mode readonly – režim pouze pro čtení
-/mode write – zapisovací režim (vyžaduje lokální povolení)
-/stop – zastavení běžící úlohy
-/version – verze služby
+const HELP = `cdxtg commands:
+/start – welcome and access status
+/help – show this command reference
+/id – show your Telegram user ID and chat ID
+/new – start a new Codex session
+/status – show the current session
+/workspace – list allowed workspaces
+/workspace 2 – switch to workspace number 2
+/mode readonly – use read-only mode
+/mode write – use write mode (requires local opt-in)
+/stop – stop the running task
+/version – show the cdxtg version
 
-Obyčejnou zprávu pošlu Codexu jako úkol.`;
+Send any regular text message to give Codex a task.`;
 
 export function createBot(config: AppConfig): Bot {
   const bot = new Bot(config.telegramBotToken);
   const sessions = new Map<number, CodexSession>();
+  const isAllowedUser = createAllowedUserChecker(config.allowedUserIds, config.envFile);
 
   const getSession = (chatId: number): CodexSession => {
     let session = sessions.get(chatId);
@@ -39,26 +40,26 @@ export function createBot(config: AppConfig): Bot {
 
   const authorized = (ctx: Context): boolean => {
     const userId = ctx.from?.id;
-    return userId !== undefined && config.allowedUserIds.has(userId);
+    return userId !== undefined && isAllowedUser(userId);
   };
 
   bot.use(async (ctx, next) => {
     if (ctx.message?.text?.startsWith("/id")) return next();
     if (!authorized(ctx)) {
-      const id = ctx.from?.id ?? "neznámé";
-      await ctx.reply(`Přístup není povolen. Vaše Telegram user ID je ${id}. Přidejte ho lokálně do TELEGRAM_ALLOWED_USER_IDS.`);
+      const id = ctx.from?.id ?? "unknown";
+      await ctx.reply(`Access denied. Your Telegram user ID is ${id}. Add it locally to TELEGRAM_ALLOWED_USER_IDS.`);
       return;
     }
     await next();
   });
 
   bot.command("id", async (ctx) => {
-    await ctx.reply(`Telegram user ID: ${ctx.from?.id ?? "neznámé"}\nChat ID: ${ctx.chat.id}`);
+    await ctx.reply(`Telegram user ID: ${ctx.from?.id ?? "unknown"}\nChat ID: ${ctx.chat.id}`);
   });
 
   bot.command("start", async (ctx) => {
     const session = getSession(ctx.chat.id);
-    await ctx.reply(`cdxtg ${displayVersion()} je připraven.\nWorkspace: ${session.info.workspace}\nRežim: ${session.info.mode}\n\n${HELP}`);
+    await ctx.reply(`cdxtg ${displayVersion()} is ready.\nWorkspace: ${session.info.workspace}\nMode: ${session.info.mode}\n\n${HELP}`);
   });
 
   bot.command("help", async (ctx) => ctx.reply(HELP));
@@ -66,17 +67,17 @@ export function createBot(config: AppConfig): Bot {
 
   bot.command("new", async (ctx) => {
     getSession(ctx.chat.id).reset();
-    await ctx.reply("Založena nová Codex relace.");
+    await ctx.reply("Started a new Codex session.");
   });
 
   bot.command("status", async (ctx) => {
     const info = getSession(ctx.chat.id).info;
     await ctx.reply([
-      `Stav: ${info.busy ? "pracuji" : "připraven"}`,
+      `Status: ${info.busy ? "working" : "ready"}`,
       `Workspace: ${info.workspace}`,
-      `Režim: ${info.mode}`,
-      `Vlákno: ${info.threadId ?? "nové – vznikne s prvním úkolem"}`,
-      `Model: ${info.model ?? "výchozí Codex"}`,
+      `Mode: ${info.mode}`,
+      `Thread: ${info.threadId ?? "new – created with the first task"}`,
+      `Model: ${info.model ?? "Codex default"}`,
     ].join("\n"));
   });
 
@@ -84,19 +85,19 @@ export function createBot(config: AppConfig): Bot {
     const raw = ctx.match.trim();
     const session = getSession(ctx.chat.id);
     if (!raw) {
-      const lines = config.workspaces.map((workspace, index) => `${index + 1}. ${workspace}${workspace === session.info.workspace ? " ← aktivní" : ""}`);
-      await ctx.reply(`Povolené workspace:\n${lines.join("\n")}\n\nPřepnutí: /workspace 2`);
+      const lines = config.workspaces.map((workspace, index) => `${index + 1}. ${workspace}${workspace === session.info.workspace ? " ← active" : ""}`);
+      await ctx.reply(`Allowed workspaces:\n${lines.join("\n")}\n\nSwitch with: /workspace 2`);
       return;
     }
 
     const index = Number(raw) - 1;
     const workspace = Number.isInteger(index) ? config.workspaces[index] : undefined;
     if (!workspace) {
-      await ctx.reply("Neplatné číslo workspace. Použijte /workspace pro seznam.");
+      await ctx.reply("Invalid workspace number. Use /workspace to see the list.");
       return;
     }
     session.reset({ workspace });
-    await ctx.reply(`Aktivní workspace: ${workspace}\nByla založena nová Codex relace.`);
+    await ctx.reply(`Active workspace: ${workspace}\nStarted a new Codex session.`);
   });
 
   bot.command("mode", async (ctx) => {
@@ -108,27 +109,27 @@ export function createBot(config: AppConfig): Bot {
         : undefined;
 
     if (!mode) {
-      await ctx.reply("Použití: /mode readonly nebo /mode write");
+      await ctx.reply("Usage: /mode readonly or /mode write");
       return;
     }
     if (mode === "workspace-write" && !config.enableWrite) {
-      await ctx.reply("Zapisovací režim je lokálně vypnutý. Správce musí nastavit CODEX_ENABLE_WRITE=true.");
+      await ctx.reply("Write mode is disabled locally. The administrator must set CODEX_ENABLE_WRITE=true.");
       return;
     }
     getSession(ctx.chat.id).reset({ mode });
-    await ctx.reply(`Nový režim: ${mode}. Byla založena nová Codex relace.`);
+    await ctx.reply(`New mode: ${mode}. Started a new Codex session.`);
   });
 
   bot.command("stop", async (ctx) => {
     const stopped = getSession(ctx.chat.id).stop();
-    await ctx.reply(stopped ? "Zastavuji běžící úlohu…" : "V tomto chatu žádná úloha neběží.");
+    await ctx.reply(stopped ? "Stopping the running task…" : "No task is running in this chat.");
   });
 
   bot.on("message:text", async (ctx) => {
     const prompt = ctx.message.text.trim();
     if (!prompt || prompt.startsWith("/")) return;
     const session = getSession(ctx.chat.id);
-    await ctx.reply("Úkol přijat. Pracuji…");
+    await ctx.reply("Task received. Working…");
 
     const typing = setInterval(() => {
       void ctx.replyWithChatAction("typing").catch(() => undefined);
@@ -141,8 +142,8 @@ export function createBot(config: AppConfig): Bot {
       for (const chunk of splitTelegramText(result.text)) await ctx.reply(chunk);
     } catch (error) {
       const message = errorMessage(error);
-      if (/abort/i.test(message)) await ctx.reply("Úloha byla zastavena.");
-      else await ctx.reply(`Codex úlohu nedokončil: ${message.slice(0, 3500)}`);
+      if (/abort/i.test(message)) await ctx.reply("The task was stopped.");
+      else await ctx.reply(`Codex could not complete the task: ${message.slice(0, 3500)}`);
     } finally {
       clearInterval(typing);
     }

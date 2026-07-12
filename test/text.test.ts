@@ -7,12 +7,12 @@ describe("splitTelegramText", () => {
   });
 
   it("splits long messages without losing content", () => {
-    const chunks = splitTelegramText("jedna dva tri čtyři pět šest", 12);
+    const chunks = splitTelegramText("one two three four five six", 12);
     expect(chunks.every((chunk) => chunk.length <= 12)).toBe(true);
-    expect(chunks.join(" ")).toBe("jedna dva tri čtyři pět šest");
+    expect(chunks.join(" ")).toBe("one two three four five six");
   });
 
   it("provides a useful fallback for an empty Codex response", () => {
-    expect(splitTelegramText("")[0]).toMatch(/bez textové odpovědi/);
+    expect(splitTelegramText("")[0]).toMatch(/without a text response/);
   });
 });

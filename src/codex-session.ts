@@ -32,7 +32,7 @@ export class CodexSession {
   }
 
   reset(next?: Partial<Pick<SessionOptions, "workspace" | "mode">>): void {
-    if (this.busy) throw new Error("Nejdřív zastavte běžící úlohu pomocí /stop.");
+    if (this.busy) throw new Error("Stop the running task with /stop first.");
     this.options = { ...this.options, ...next };
     this.thread = null;
     this.currentThreadId = null;
@@ -45,7 +45,7 @@ export class CodexSession {
   }
 
   async run(prompt: string): Promise<RunResult> {
-    if (this.busy) throw new Error("V tomto chatu už jedna úloha běží. Použijte /stop nebo počkejte.");
+    if (this.busy) throw new Error("A task is already running in this chat. Wait or use /stop.");
     if (!this.thread) this.thread = this.codex.startThread(this.threadOptions());
 
     const controller = new AbortController();

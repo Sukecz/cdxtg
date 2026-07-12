@@ -7,21 +7,21 @@ async function main(): Promise<void> {
   const bot = createBot(config);
 
   await bot.api.setMyCommands([
-    { command: "start", description: "Úvod a stav" },
-    { command: "help", description: "Přehled příkazů" },
+    { command: "start", description: "Welcome and access status" },
+    { command: "help", description: "Command reference" },
     { command: "id", description: "Telegram user ID a chat ID" },
-    { command: "new", description: "Nová Codex relace" },
-    { command: "status", description: "Stav relace" },
-    { command: "workspace", description: "Výběr workspace" },
-    { command: "mode", description: "Režim readonly/write" },
-    { command: "stop", description: "Zastavit úlohu" },
-    { command: "version", description: "Verze cdxtg" },
+    { command: "new", description: "Start a new Codex session" },
+    { command: "status", description: "Show the current session" },
+    { command: "workspace", description: "Select a workspace" },
+    { command: "mode", description: "Select readonly/write mode" },
+    { command: "stop", description: "Stop the running task" },
+    { command: "version", description: "Show the cdxtg version" },
   ]);
 
   const me = await bot.api.getMe();
-  console.log(`cdxtg běží jako @${me.username}`);
+  console.log(`cdxtg is running as @${me.username}`);
   if (config.allowedUserIds.size === 0) {
-    console.warn("Allowlist je prázdný. Bot odpoví pouze identifikací uživatele; použijte /id a nastavte TELEGRAM_ALLOWED_USER_IDS.");
+    console.warn("The allowlist is empty. The bot will only identify users; use /id and set TELEGRAM_ALLOWED_USER_IDS.");
   }
 
   const stop = (): void => {
@@ -33,6 +33,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error(`cdxtg se nepodařilo spustit: ${errorMessage(error)}`);
+  console.error(`cdxtg failed to start: ${errorMessage(error)}`);
   process.exitCode = 1;
 });
