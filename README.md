@@ -18,7 +18,8 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 - a separate Codex session for each chat;
 - Telegram typing status while Codex is working;
 - multiple preconfigured workspaces;
-- safe `read-only` and opt-in `workspace-write` modes;
+- an inline workspace picker when starting a new session;
+- safe `read-only`, opt-in `workspace-write`, and confirmed `danger-full-access` modes;
 - cancellation of active tasks;
 - direct integration through the official TypeScript SDK without parsing CLI output;
 - long polling with no public domain, webhook, database, or extra infrastructure.
@@ -97,12 +98,13 @@ Every regular text message becomes a Codex prompt.
 | `/start` | Welcome message and access status |
 | `/help` | Command reference |
 | `/id` | Show your Telegram user ID and chat ID |
-| `/new` | Discard the current session and start a new one |
+| `/new` | Choose a workspace and start a new session |
 | `/status` | Show workspace, mode, state, model, and Codex thread ID |
 | `/workspace` | List allowed workspaces |
 | `/workspace 2` | Switch to the second workspace and start a new session |
 | `/mode readonly` | Start a new read-only session |
 | `/mode write` | Start a session that may write inside the workspace |
+| `/mode full` | Confirm and start a session with full service-user access |
 | `/stop` | Stop the active task |
 | `/version` | Show the cdxtg version |
 
@@ -114,7 +116,9 @@ Run the tests, explain the failures, and propose a fix.
 Add form validation and verify it with a test.
 ```
 
-Changing the workspace or mode starts a fresh Codex session. Write mode is available only when `CODEX_ENABLE_WRITE=true` is configured locally.
+`/new` and `/workspace` display inline buttons for every path in `CODEX_WORKSPACES`. Changing the workspace or mode starts a fresh Codex session. The workspace list is hot-reloaded from `telegram.env`, so adding a path does not require a restart.
+
+Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additionally requires `CODEX_ENABLE_FULL_ACCESS=true` and an explicit confirmation in Telegram. Full Access maps to Codex `danger-full-access`: it disables the filesystem sandbox and can modify anything accessible to the service user.
 
 ## Configuration
 
@@ -125,7 +129,8 @@ Changing the workspace or mode starts a fresh Codex session. Write mode is avail
 | `CODEX_WORKSPACES` | current directory | Exact comma-separated workspace allowlist |
 | `CODEX_MODEL` | Codex default | Optional model passed to the SDK |
 | `CODEX_DEFAULT_MODE` | `read-only` | `read-only` or `workspace-write` |
-| `CODEX_ENABLE_WRITE` | `false` | Enables switching to write mode |
+| `CODEX_ENABLE_WRITE` | `false` | Enables switching to write mode; hot-reloaded at runtime |
+| `CODEX_ENABLE_FULL_ACCESS` | `false` | Enables confirmed `/mode full`; hot-reloaded at runtime |
 | `CODEX_APPROVAL_POLICY` | `never` | SDK approval policy; keep `never` for headless operation |
 | `CDXTG_ENV_FILE` | `telegram.env` | Path to the local environment file |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
@@ -172,7 +177,7 @@ The package uses SemVer syntax such as `0.1.0`, while public feature releases ad
 - Telegram text is passed to the official Codex SDK as input and is never interpolated into a shell command.
 - Unauthorized users receive only their own Telegram ID and no Codex access.
 - A workspace can be selected only from the locally configured exact allowlist.
-- `danger-full-access` is not exposed through Telegram.
+- `danger-full-access` requires a local opt-in and an explicit Telegram confirmation.
 - Read-only mode is the default; write mode requires a local opt-in.
 - The bot does not add network or system privileges beyond those of its service account.
 

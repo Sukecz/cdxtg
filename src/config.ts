@@ -10,12 +10,13 @@ export interface AppConfig {
   model?: string;
   defaultMode: SafeSandboxMode;
   enableWrite: boolean;
+  enableFullAccess: boolean;
   approvalPolicy: ApprovalMode;
   logLevel: LogLevel;
   envFile?: string;
 }
 
-export type SafeSandboxMode = Extract<SandboxMode, "read-only" | "workspace-write">;
+export type SafeSandboxMode = Extract<SandboxMode, "read-only" | "workspace-write" | "danger-full-access">;
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -30,7 +31,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const allowedUserIds = new Set(parseNumericList(env.TELEGRAM_ALLOWED_USER_IDS));
   const workspaces = parseWorkspaces(env.CODEX_WORKSPACES);
   const enableWrite = parseBoolean(env.CODEX_ENABLE_WRITE, false, "CODEX_ENABLE_WRITE");
-  const defaultMode = parseMode(env.CODEX_DEFAULT_MODE, enableWrite);
+  const enableFullAccess = parseBoolean(env.CODEX_ENABLE_FULL_ACCESS, false, "CODEX_ENABLE_FULL_ACCESS");
+  const defaultMode = parseMode(env.CODEX_DEFAULT_MODE, enableWrite, enableFullAccess);
   const approvalPolicy = parseApprovalPolicy(env.CODEX_APPROVAL_POLICY);
   const logLevel = parseLogLevel(env.LOG_LEVEL);
   const model = optional(env.CODEX_MODEL);
@@ -42,6 +44,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...(model ? { model } : {}),
     defaultMode,
     enableWrite,
+    enableFullAccess,
     approvalPolicy,
     logLevel,
     ...(envFile ? { envFile } : {}),
@@ -72,6 +75,55 @@ export function createAllowedUserChecker(
   return (userId: number): boolean => {
     refresh();
     return allowedIds.has(userId);
+  };
+}
+
+export function createWorkspaceProvider(
+  initialWorkspaces: readonly string[],
+  envFile?: string,
+  reportError: (message: string) => void = console.warn,
+): () => readonly string[] {
+  let workspaces = [...initialWorkspaces];
+  let lastModified = -1;
+
+  return (): readonly string[] => {
+    if (!envFile) return workspaces;
+    try {
+      const modified = statSync(envFile).mtimeMs;
+      if (modified === lastModified) return workspaces;
+      const values = parseEnv(readFileSync(envFile, "utf8"));
+      if (values.CODEX_WORKSPACES?.trim()) {
+        workspaces = parseWorkspaces(values.CODEX_WORKSPACES);
+      }
+      lastModified = modified;
+    } catch (error) {
+      reportError(`Could not reload CODEX_WORKSPACES: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return workspaces;
+  };
+}
+
+export function createBooleanSettingProvider(
+  name: "CODEX_ENABLE_WRITE" | "CODEX_ENABLE_FULL_ACCESS",
+  initialValue: boolean,
+  envFile?: string,
+  reportError: (message: string) => void = console.warn,
+): () => boolean {
+  let value = initialValue;
+  let lastModified = -1;
+
+  return (): boolean => {
+    if (!envFile) return value;
+    try {
+      const modified = statSync(envFile).mtimeMs;
+      if (modified === lastModified) return value;
+      const values = parseEnv(readFileSync(envFile, "utf8"));
+      value = parseBoolean(values[name], initialValue, name);
+      lastModified = modified;
+    } catch (error) {
+      reportError(`Could not reload ${name}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    return value;
   };
 }
 
@@ -113,6 +165,9 @@ export function parseWorkspaces(raw: string | undefined): string[] {
     if (!existsSync(resolved)) {
       throw new Error(`Configured workspace does not exist: ${resolved}`);
     }
+    if (!statSync(resolved).isDirectory()) {
+      throw new Error(`Configured workspace is not a directory: ${resolved}`);
+    }
     unique.add(realpathSync(resolved));
   }
 
@@ -120,13 +175,16 @@ export function parseWorkspaces(raw: string | undefined): string[] {
   return [...unique];
 }
 
-function parseMode(raw: string | undefined, enableWrite: boolean): SafeSandboxMode {
+function parseMode(raw: string | undefined, enableWrite: boolean, enableFullAccess: boolean): SafeSandboxMode {
   const value = optional(raw) ?? "read-only";
-  if (value !== "read-only" && value !== "workspace-write") {
-    throw new Error("CODEX_DEFAULT_MODE must be read-only or workspace-write");
+  if (value !== "read-only" && value !== "workspace-write" && value !== "danger-full-access") {
+    throw new Error("CODEX_DEFAULT_MODE must be read-only, workspace-write, or danger-full-access");
   }
   if (value === "workspace-write" && !enableWrite) {
     throw new Error("CODEX_DEFAULT_MODE=workspace-write requires CODEX_ENABLE_WRITE=true");
+  }
+  if (value === "danger-full-access" && !enableFullAccess) {
+    throw new Error("CODEX_DEFAULT_MODE=danger-full-access requires CODEX_ENABLE_FULL_ACCESS=true");
   }
   return value;
 }

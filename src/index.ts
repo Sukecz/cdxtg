@@ -10,7 +10,7 @@ async function main(): Promise<void> {
     { command: "start", description: "Welcome and access status" },
     { command: "help", description: "Command reference" },
     { command: "id", description: "Telegram user ID a chat ID" },
-    { command: "new", description: "Start a new Codex session" },
+    { command: "new", description: "Choose workspace and start a session" },
     { command: "status", description: "Show the current session" },
     { command: "workspace", description: "Select a workspace" },
     { command: "mode", description: "Select readonly/write mode" },

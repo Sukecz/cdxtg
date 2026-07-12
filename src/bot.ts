@@ -1,5 +1,6 @@
 import { Bot, GrammyError, HttpError, type Context } from "grammy";
-import { createAllowedUserChecker, type AppConfig, type SafeSandboxMode } from "./config.js";
+import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, type AppConfig, type SafeSandboxMode } from "./config.js";
+import { fullAccessKeyboard, parseWorkspaceCallback, workspaceKeyboard } from "./bot-ui.js";
 import { CodexSession } from "./codex-session.js";
 import { errorMessage, splitTelegramText } from "./text.js";
 import pkg from "../package.json" with { type: "json" };
@@ -8,12 +9,13 @@ const HELP = `cdxtg commands:
 /start – welcome and access status
 /help – show this command reference
 /id – show your Telegram user ID and chat ID
-/new – start a new Codex session
+/new – choose a workspace and start a new Codex session
 /status – show the current session
 /workspace – list allowed workspaces
 /workspace 2 – switch to workspace number 2
 /mode readonly – use read-only mode
 /mode write – use write mode (requires local opt-in)
+/mode full – use full host access (requires local opt-in and confirmation)
 /stop – stop the running task
 /version – show the cdxtg version
 
@@ -23,12 +25,15 @@ export function createBot(config: AppConfig): Bot {
   const bot = new Bot(config.telegramBotToken);
   const sessions = new Map<number, CodexSession>();
   const isAllowedUser = createAllowedUserChecker(config.allowedUserIds, config.envFile);
+  const getWorkspaces = createWorkspaceProvider(config.workspaces, config.envFile);
+  const isWriteEnabled = createBooleanSettingProvider("CODEX_ENABLE_WRITE", config.enableWrite, config.envFile);
+  const isFullAccessEnabled = createBooleanSettingProvider("CODEX_ENABLE_FULL_ACCESS", config.enableFullAccess, config.envFile);
 
   const getSession = (chatId: number): CodexSession => {
     let session = sessions.get(chatId);
     if (!session) {
       session = new CodexSession({
-        workspace: config.workspaces[0]!,
+        workspace: getWorkspaces()[0]!,
         mode: config.defaultMode,
         approvalPolicy: config.approvalPolicy,
         ...(config.model ? { model: config.model } : {}),
@@ -66,8 +71,9 @@ export function createBot(config: AppConfig): Bot {
   bot.command("version", async (ctx) => ctx.reply(`cdxtg ${displayVersion()}`));
 
   bot.command("new", async (ctx) => {
-    getSession(ctx.chat.id).reset();
-    await ctx.reply("Started a new Codex session.");
+    await ctx.reply("Choose a workspace for the new Codex session:", {
+      reply_markup: workspaceKeyboard(getWorkspaces()),
+    });
   });
 
   bot.command("status", async (ctx) => {
@@ -84,14 +90,16 @@ export function createBot(config: AppConfig): Bot {
   bot.command("workspace", async (ctx) => {
     const raw = ctx.match.trim();
     const session = getSession(ctx.chat.id);
+    const workspaces = getWorkspaces();
     if (!raw) {
-      const lines = config.workspaces.map((workspace, index) => `${index + 1}. ${workspace}${workspace === session.info.workspace ? " ← active" : ""}`);
-      await ctx.reply(`Allowed workspaces:\n${lines.join("\n")}\n\nSwitch with: /workspace 2`);
+      await ctx.reply("Choose a workspace:", {
+        reply_markup: workspaceKeyboard(workspaces),
+      });
       return;
     }
 
     const index = Number(raw) - 1;
-    const workspace = Number.isInteger(index) ? config.workspaces[index] : undefined;
+    const workspace = Number.isInteger(index) ? workspaces[index] : undefined;
     if (!workspace) {
       await ctx.reply("Invalid workspace number. Use /workspace to see the list.");
       return;
@@ -100,24 +108,82 @@ export function createBot(config: AppConfig): Bot {
     await ctx.reply(`Active workspace: ${workspace}\nStarted a new Codex session.`);
   });
 
+  bot.on("callback_query:data", async (ctx, next) => {
+    const index = parseWorkspaceCallback(ctx.callbackQuery.data);
+    if (index === null) return next();
+    if (!ctx.chat) {
+      await ctx.answerCallbackQuery({ text: "This picker is not attached to a chat.", show_alert: true });
+      return;
+    }
+    const workspace = getWorkspaces()[index];
+    if (!workspace) {
+      await ctx.answerCallbackQuery({ text: "This workspace is no longer available.", show_alert: true });
+      return;
+    }
+
+    try {
+      getSession(ctx.chat.id).reset({ workspace });
+      await ctx.answerCallbackQuery({ text: "Workspace selected" });
+      await ctx.editMessageText(`Active workspace: ${workspace}\nStarted a new Codex session.`);
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
+    }
+  });
+
   bot.command("mode", async (ctx) => {
     const requested = ctx.match.trim().toLowerCase();
     const mode: SafeSandboxMode | undefined = requested === "readonly" || requested === "read-only"
       ? "read-only"
       : requested === "write" || requested === "workspace-write"
         ? "workspace-write"
+        : requested === "full" || requested === "danger-full-access"
+          ? "danger-full-access"
         : undefined;
 
     if (!mode) {
-      await ctx.reply("Usage: /mode readonly or /mode write");
+      await ctx.reply("Usage: /mode readonly, /mode write, or /mode full");
       return;
     }
-    if (mode === "workspace-write" && !config.enableWrite) {
+    if (mode === "workspace-write" && !isWriteEnabled()) {
       await ctx.reply("Write mode is disabled locally. The administrator must set CODEX_ENABLE_WRITE=true.");
+      return;
+    }
+    if (mode === "danger-full-access") {
+      if (!isFullAccessEnabled()) {
+        await ctx.reply("Full Access is disabled locally. The administrator must set CODEX_ENABLE_FULL_ACCESS=true.");
+        return;
+      }
+      await ctx.reply(
+        "Full Access disables the Codex filesystem sandbox and can modify files anywhere the service user can access. Continue?",
+        { reply_markup: fullAccessKeyboard() },
+      );
       return;
     }
     getSession(ctx.chat.id).reset({ mode });
     await ctx.reply(`New mode: ${mode}. Started a new Codex session.`);
+  });
+
+  bot.callbackQuery("mode:full:confirm", async (ctx) => {
+    if (!isFullAccessEnabled()) {
+      await ctx.answerCallbackQuery({ text: "Full Access is disabled locally.", show_alert: true });
+      return;
+    }
+    if (!ctx.chat) {
+      await ctx.answerCallbackQuery({ text: "This confirmation is not attached to a chat.", show_alert: true });
+      return;
+    }
+    try {
+      getSession(ctx.chat.id).reset({ mode: "danger-full-access" });
+      await ctx.answerCallbackQuery({ text: "Full Access enabled" });
+      await ctx.editMessageText("Mode: danger-full-access\nStarted a new Codex session.");
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
+    }
+  });
+
+  bot.callbackQuery("mode:full:cancel", async (ctx) => {
+    await ctx.answerCallbackQuery({ text: "Cancelled" });
+    await ctx.editMessageText("Full Access was not enabled.");
   });
 
   bot.command("stop", async (ctx) => {

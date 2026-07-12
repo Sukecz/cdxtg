@@ -2,7 +2,7 @@ import { Codex, type ApprovalMode, type SandboxMode, type Thread } from "@openai
 
 export interface SessionOptions {
   workspace: string;
-  mode: Extract<SandboxMode, "read-only" | "workspace-write">;
+  mode: Extract<SandboxMode, "read-only" | "workspace-write" | "danger-full-access">;
   approvalPolicy: ApprovalMode;
   model?: string;
 }
@@ -70,7 +70,7 @@ export class CodexSession {
 
   private threadOptions(): {
     workingDirectory: string;
-    sandboxMode: Extract<SandboxMode, "read-only" | "workspace-write">;
+    sandboxMode: Extract<SandboxMode, "read-only" | "workspace-write" | "danger-full-access">;
     approvalPolicy: ApprovalMode;
     skipGitRepoCheck: true;
     model?: string;
