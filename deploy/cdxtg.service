@@ -10,7 +10,7 @@ Group=CHANGE_ME
 WorkingDirectory=/opt/cdxtg
 Environment=NODE_ENV=production
 Environment=CDXTG_ENV_FILE=/etc/cdxtg/telegram.env
-ExecStart=/usr/bin/node /opt/cdxtg/dist/src/index.js
+ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/cdxtg/dist/src/index.js
 Restart=on-failure
 RestartSec=5
 

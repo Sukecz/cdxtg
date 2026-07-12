@@ -39,7 +39,7 @@ umask 077
   printf 'WorkingDirectory=%s\n' "${PROJECT_DIR}"
   echo 'Environment=NODE_ENV=production'
   printf 'Environment="CDXTG_ENV_FILE=%s"\n' "${ENV_FILE}"
-  printf 'ExecStart="%s" "%s/dist/src/index.js"\n' "${NODE_BIN}" "${PROJECT_DIR}"
+  printf 'ExecStart="%s" --disable-warning=ExperimentalWarning "%s/dist/src/index.js"\n' "${NODE_BIN}" "${PROJECT_DIR}"
   echo 'Restart=on-failure'
   echo 'RestartSec=5'
   echo 'NoNewPrivileges=true'

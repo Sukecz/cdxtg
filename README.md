@@ -17,7 +17,7 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 - private access through a Telegram user ID allowlist;
 - a separate Codex session for each chat;
 - Telegram typing status while Codex is working;
-- multiple preconfigured workspaces;
+- automatic workspace discovery from local Codex thread history;
 - an inline workspace picker when starting a new session;
 - safe `read-only`, opt-in `workspace-write`, and confirmed `danger-full-access` modes;
 - cancellation of active tasks;
@@ -69,6 +69,7 @@ Send `/id` to the bot. It will show your numeric Telegram user ID but will not a
 
 ```dotenv
 TELEGRAM_ALLOWED_USER_IDS=123456789
+# Optional extra paths not yet present in Codex history:
 CODEX_WORKSPACES=/home/me/projects,/home/me/another-project
 ```
 
@@ -84,7 +85,7 @@ This command builds the app, creates a user-level systemd service, starts it imm
 npm run service:status
 ```
 
-Separate multiple IDs or workspaces with commas. The first `CODEX_WORKSPACES` entry is the default. Every configured path must exist and be accessible to the service user.
+Separate multiple IDs or extra workspaces with commas. Every configured path must exist and be accessible to the service user.
 
 > [!NOTE]
 > `npm start` runs the bot only in the current terminal. Use `npm run service:install` for a persistent installation.
@@ -100,7 +101,7 @@ Every regular text message becomes a Codex prompt.
 | `/id` | Show your Telegram user ID and chat ID |
 | `/new` | Choose a workspace and start a new session |
 | `/status` | Show workspace, mode, state, model, and Codex thread ID |
-| `/workspace` | List allowed workspaces |
+| `/workspace` | Open the workspace picker |
 | `/workspace 2` | Switch to the second workspace and start a new session |
 | `/mode readonly` | Start a new read-only session |
 | `/mode write` | Start a session that may write inside the workspace |
@@ -116,7 +117,9 @@ Run the tests, explain the failures, and propose a fix.
 Add form validation and verify it with a test.
 ```
 
-`/new` and `/workspace` display inline buttons for every path in `CODEX_WORKSPACES`. Changing the workspace or mode starts a fresh Codex session. The workspace list is hot-reloaded from `telegram.env`, so adding a path does not require a restart.
+`/new` and `/workspace` display a paginated inline picker. Like TeleCodex, cdxtg reads unique active workspace paths from the latest local `~/.codex/state_*.sqlite` database. Explicit `CODEX_WORKSPACES` entries are merged into this list. Missing and duplicate paths are removed automatically.
+
+Changing the workspace or mode starts a fresh Codex session. Extra workspace configuration is hot-reloaded from `telegram.env`, so adding a path does not require a restart.
 
 Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additionally requires `CODEX_ENABLE_FULL_ACCESS=true` and an explicit confirmation in Telegram. Full Access maps to Codex `danger-full-access`: it disables the filesystem sandbox and can modify anything accessible to the service user.
 
@@ -126,9 +129,9 @@ Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additio
 |---|---|---|
 | `TELEGRAM_BOT_TOKEN` | required | Token received from BotFather |
 | `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated numeric Telegram user IDs; hot-reloaded at runtime |
-| `CODEX_WORKSPACES` | current directory | Exact comma-separated workspace allowlist |
+| `CODEX_WORKSPACES` | current directory | Optional extra paths merged with workspaces found in Codex history |
 | `CODEX_MODEL` | Codex default | Optional model passed to the SDK |
-| `CODEX_DEFAULT_MODE` | `read-only` | `read-only` or `workspace-write` |
+| `CODEX_DEFAULT_MODE` | `read-only` | `read-only`, `workspace-write`, or `danger-full-access` |
 | `CODEX_ENABLE_WRITE` | `false` | Enables switching to write mode; hot-reloaded at runtime |
 | `CODEX_ENABLE_FULL_ACCESS` | `false` | Enables confirmed `/mode full`; hot-reloaded at runtime |
 | `CODEX_APPROVAL_POLICY` | `never` | SDK approval policy; keep `never` for headless operation |
@@ -176,7 +179,7 @@ The package uses SemVer syntax such as `0.1.0`, while public feature releases ad
 
 - Telegram text is passed to the official Codex SDK as input and is never interpolated into a shell command.
 - Unauthorized users receive only their own Telegram ID and no Codex access.
-- A workspace can be selected only from the locally configured exact allowlist.
+- Workspace choices come from local Codex thread history and optional locally configured paths; Telegram users cannot submit arbitrary paths.
 - `danger-full-access` requires a local opt-in and an explicit Telegram confirmation.
 - Read-only mode is the default; write mode requires a local opt-in.
 - The bot does not add network or system privileges beyond those of its service account.

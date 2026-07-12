@@ -11,9 +11,9 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/src/index.js",
+    "start": "node --disable-warning=ExperimentalWarning dist/src/index.js",
     "check": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
     "setup": "bash scripts/setup-env.sh",
     "service:install": "bash scripts/install-user-service.sh",
     "service:uninstall": "bash scripts/uninstall-user-service.sh",

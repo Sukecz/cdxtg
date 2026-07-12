@@ -1,6 +1,7 @@
 import { Bot, GrammyError, HttpError, type Context } from "grammy";
 import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, type AppConfig, type SafeSandboxMode } from "./config.js";
-import { fullAccessKeyboard, parseWorkspaceCallback, workspaceKeyboard } from "./bot-ui.js";
+import { fullAccessKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, workspaceKeyboard } from "./bot-ui.js";
+import { listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
 import { CodexSession } from "./codex-session.js";
 import { errorMessage, splitTelegramText } from "./text.js";
 import pkg from "../package.json" with { type: "json" };
@@ -25,7 +26,11 @@ export function createBot(config: AppConfig): Bot {
   const bot = new Bot(config.telegramBotToken);
   const sessions = new Map<number, CodexSession>();
   const isAllowedUser = createAllowedUserChecker(config.allowedUserIds, config.envFile);
-  const getWorkspaces = createWorkspaceProvider(config.workspaces, config.envFile);
+  const getConfiguredWorkspaces = createWorkspaceProvider(config.workspaces, config.envFile);
+  const getWorkspaces = (): readonly string[] => mergeWorkspaceLists(
+    getConfiguredWorkspaces(),
+    listCodexWorkspaces(),
+  );
   const isWriteEnabled = createBooleanSettingProvider("CODEX_ENABLE_WRITE", config.enableWrite, config.envFile);
   const isFullAccessEnabled = createBooleanSettingProvider("CODEX_ENABLE_FULL_ACCESS", config.enableFullAccess, config.envFile);
 
@@ -109,6 +114,16 @@ export function createBot(config: AppConfig): Bot {
   });
 
   bot.on("callback_query:data", async (ctx, next) => {
+    if (ctx.callbackQuery.data === "workspace-page:noop") {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+    const page = parseWorkspacePageCallback(ctx.callbackQuery.data);
+    if (page !== null) {
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageReplyMarkup({ reply_markup: workspaceKeyboard(getWorkspaces(), page) });
+      return;
+    }
     const index = parseWorkspaceCallback(ctx.callbackQuery.data);
     if (index === null) return next();
     if (!ctx.chat) {

@@ -11,7 +11,7 @@ All public project content must be written in English, including bot messages, d
 - Never commit or print bot tokens, API keys, Codex auth files, Telegram IDs, private paths, or user content.
 - Keep `telegram.env`, `.env`, `.codex/`, logs, state, and generated files ignored.
 - Telegram input must only be passed as SDK input. Never interpolate it into a shell command.
-- Keep an explicit Telegram user allowlist and an exact workspace allowlist.
+- Keep an explicit Telegram user allowlist. Workspace discovery may read local Codex thread history, but must ignore stale paths and never accept arbitrary Telegram-supplied paths.
 - Default to `read-only`. Expose `danger-full-access` only behind the local `CODEX_ENABLE_FULL_ACCESS` opt-in and an explicit Telegram confirmation.
 - Do not add deployment, restart, update, or host-administration commands to the bot without an explicit project decision and additional safeguards.
 
@@ -51,4 +51,4 @@ All public project content must be written in English, including bot messages, d
 - Keep `npm run service:install` as the documented default installation path. It must fail safely when the allowlist is missing and must never copy secret values into the generated unit file.
 - Keep `.env.example` as the committed blank template. `npm run setup` may create an ignored `telegram.env`, but it must never overwrite an existing file.
 - Keep Telegram allowlist hot reload working so the first authorized user can move from `/id` to normal prompts without restarting the bot.
-- Keep `/new` and `/workspace` on the inline workspace picker backed only by hot-reloaded `CODEX_WORKSPACES` entries.
+- Keep `/new` and `/workspace` on the paginated inline picker backed by local Codex thread history plus hot-reloaded `CODEX_WORKSPACES` entries.
