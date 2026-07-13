@@ -182,7 +182,9 @@ Remove only the service, without deleting the project or configuration:
 npm run service:uninstall
 ```
 
-The service runs as the current user, who must have a working `codex login`. An advanced system-level template is available at `deploy/cdxtg.service`. Never place secrets directly in a unit file.
+The service runs as the current user, who must have a working `codex login`. The generated unit intentionally does not add a second systemd sandbox: even apparently unrelated systemd restrictions can imply `NoNewPrivileges` or a mount namespace, override the selected Codex mode, and break normal user tools such as `crontab`. Read and write boundaries are enforced by the Codex sandbox selected in Telegram. Full Access still grants only the permissions already available to the service account; it does not grant root access or passwordless `sudo`.
+
+An advanced system-level template is available at `deploy/cdxtg.service`. Never place secrets directly in a unit file.
 
 ## Development
 

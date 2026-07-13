@@ -14,20 +14,9 @@ ExecStart=/usr/bin/node --disable-warning=ExperimentalWarning /opt/cdxtg/dist/sr
 Restart=on-failure
 RestartSec=5
 
-# Baseline hardening. ProtectHome is intentionally read-only because Codex auth
-# and configured workspaces commonly live below the service user's home.
-NoNewPrivileges=true
-PrivateTmp=true
-PrivateDevices=true
-ProtectSystem=strict
-ProtectHome=read-only
-ProtectKernelTunables=true
-ProtectKernelModules=true
-ProtectControlGroups=true
-ProtectKernelLogs=true
-RestrictSUIDSGID=true
-LockPersonality=true
-RestrictRealtime=true
+# Codex applies the mode selected in Telegram. Do not add systemd sandboxing
+# here: even apparently unrelated restrictions can imply NoNewPrivileges or a
+# mount namespace and break danger-full-access or setgid tools such as crontab.
 
 [Install]
 WantedBy=multi-user.target

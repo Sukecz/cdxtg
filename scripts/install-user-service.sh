@@ -42,13 +42,6 @@ umask 077
   printf 'ExecStart="%s" --disable-warning=ExperimentalWarning "%s/dist/src/index.js"\n' "${NODE_BIN}" "${PROJECT_DIR}"
   echo 'Restart=on-failure'
   echo 'RestartSec=5'
-  echo 'NoNewPrivileges=true'
-  echo 'PrivateTmp=true'
-  echo 'ProtectSystem=strict'
-  echo 'ProtectHome=read-only'
-  echo 'RestrictSUIDSGID=true'
-  echo 'LockPersonality=true'
-  echo 'RestrictRealtime=true'
   echo
   echo '[Install]'
   echo 'WantedBy=default.target'
