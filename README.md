@@ -23,6 +23,7 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 - automatic workspace discovery from local Codex thread history;
 - an inline workspace picker when starting a new session;
 - model and reasoning-effort pickers backed by the local Codex model cache;
+- compact effective model and available Codex rate-limit reporting in session status;
 - safe `read-only`, opt-in `workspace-write`, and confirmed `danger-full-access` modes;
 - cancellation of active tasks;
 - direct integration through the official TypeScript SDK without parsing CLI output;

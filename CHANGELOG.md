@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.0 — 2026-07-15
+
+- added compact effective model and reasoning-effort information to `/new`, `/status`, and new-session confirmations;
+- added Codex account rate-limit windows to `/status`, including remaining capacity and reset times;
+- resolved runtime status through the official Codex app-server protocol bundled with the SDK;
+- kept status commands portable across platforms and resilient when a Codex version or authentication method does not expose runtime details.
+
 ## 0.3 — 2026-07-13
 
 - chained model and reasoning-effort selection for a smoother new-session flow;
