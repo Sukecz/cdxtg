@@ -81,6 +81,13 @@ export function formatModelSummary(status: Pick<CodexRuntimeStatus, "model" | "r
   return `${status.model} · ${status.reasoningEffort}`;
 }
 
+export function formatNewSessionSummary(
+  workspace: string,
+  status: Pick<CodexRuntimeStatus, "model" | "reasoningEffort">,
+): string {
+  return `Active workspace: ${workspace}\nModel: ${formatModelSummary(status)}\nStarted a new Codex session.`;
+}
+
 export function formatRateLimits(snapshot: RateLimitSnapshot, locale = "en-GB"): string[] {
   return [snapshot.primary, snapshot.secondary]
     .filter((window): window is RateLimitWindow => window !== null)

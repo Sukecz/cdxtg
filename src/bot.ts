@@ -4,7 +4,7 @@ import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspace
 import { fullAccessKeyboard, modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, streamModeKeyboard, workspaceKeyboard } from "./bot-ui.js";
 import { listCodexModels, listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
 import { CodexSession } from "./codex-session.js";
-import { formatModelSummary, formatRateLimits, readCodexRuntimeStatus } from "./codex-status.js";
+import { formatModelSummary, formatNewSessionSummary, formatRateLimits, readCodexRuntimeStatus } from "./codex-status.js";
 import { TelegramStreamPresenter } from "./telegram-stream.js";
 import { errorMessage } from "./text.js";
 import type { StreamMode } from "./streaming.js";
@@ -179,7 +179,13 @@ export function createBot(config: AppConfig): Bot {
       return;
     }
     session.reset({ workspace });
-    await ctx.reply(`Active workspace: ${workspace}\nStarted a new Codex session.`);
+    const info = session.info;
+    const runtime = await readCodexRuntimeStatus({
+      workspace: info.workspace,
+      ...(info.model ? { model: info.model } : {}),
+      ...(info.reasoningEffort ? { reasoningEffort: info.reasoningEffort } : {}),
+    });
+    await ctx.reply(formatNewSessionSummary(workspace, runtime));
   });
 
   bot.on("callback_query:data", async (ctx, next) => {
@@ -206,9 +212,16 @@ export function createBot(config: AppConfig): Bot {
     }
 
     try {
-      getSession(ctx.chat.id).reset({ workspace });
+      const session = getSession(ctx.chat.id);
+      session.reset({ workspace });
+      const info = session.info;
+      const runtime = await readCodexRuntimeStatus({
+        workspace: info.workspace,
+        ...(info.model ? { model: info.model } : {}),
+        ...(info.reasoningEffort ? { reasoningEffort: info.reasoningEffort } : {}),
+      });
       await ctx.answerCallbackQuery({ text: "Workspace selected" });
-      await ctx.editMessageText(`Active workspace: ${workspace}\nStarted a new Codex session.`);
+      await ctx.editMessageText(formatNewSessionSummary(workspace, runtime));
     } catch (error) {
       await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
     }

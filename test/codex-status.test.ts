@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatModelSummary, formatRateLimits, resolveRuntimeStatus } from "../src/codex-status.js";
+import { formatModelSummary, formatNewSessionSummary, formatRateLimits, resolveRuntimeStatus } from "../src/codex-status.js";
 
 describe("Codex status", () => {
   it("resolves the effective configured model and reasoning effort", () => {
@@ -28,6 +28,17 @@ describe("Codex status", () => {
 
     expect(status.model).toBe("session-model");
     expect(status.reasoningEffort).toBe("low");
+  });
+
+  it("includes the effective model in a new-session confirmation", () => {
+    expect(formatNewSessionSummary("/workspace", {
+      model: "gpt-example",
+      reasoningEffort: "medium",
+    })).toBe([
+      "Active workspace: /workspace",
+      "Model: gpt-example · medium",
+      "Started a new Codex session.",
+    ].join("\n"));
   });
 
   it("falls back safely when app-server status is unavailable", () => {
