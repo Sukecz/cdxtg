@@ -103,8 +103,8 @@ Every regular text message becomes a Codex prompt.
 | `/start` | Welcome message and access status |
 | `/help` | Command reference |
 | `/id` | Show your Telegram user ID and chat ID |
-| `/new` | Choose a workspace and start a new session |
-| `/status` | Show workspace, mode, state, model, and Codex thread ID |
+| `/new` | Show the effective model, choose a workspace, and start a new session |
+| `/status` | Show session details, the effective model, and available Codex rate limits |
 | `/workspace` | Open the workspace picker |
 | `/workspace 2` | Switch to the second workspace and start a new session |
 | `/model` | Select a Codex model, then its reasoning effort, in one flow |
@@ -127,6 +127,8 @@ Add form validation and verify it with a test.
 `/new` and `/workspace` display a paginated inline picker. Like TeleCodex, cdxtg reads unique active workspace paths from the latest local `~/.codex/state_*.sqlite` database. Explicit `CODEX_WORKSPACES` entries are merged into this list. Missing and duplicate paths are removed automatically.
 
 Changing the workspace or mode starts a fresh Codex session. Extra workspace configuration is hot-reloaded from `telegram.env`, so adding a path does not require a restart.
+
+`/new` and `/status` resolve the effective model and reasoning effort through the local Codex app-server protocol. `/status` also shows the rate-limit windows returned for the authenticated Codex account. Older Codex versions and authentication methods that do not expose these fields remain supported; the bot displays a fallback instead of failing the command.
 
 Write mode is available only when `CODEX_ENABLE_WRITE=true`. Full Access additionally requires `CODEX_ENABLE_FULL_ACCESS=true` and an explicit confirmation in Telegram. Full Access maps to Codex `danger-full-access`: it disables the filesystem sandbox and can modify anything accessible to the service user.
 

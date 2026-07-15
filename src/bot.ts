@@ -4,6 +4,7 @@ import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspace
 import { fullAccessKeyboard, modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, streamModeKeyboard, workspaceKeyboard } from "./bot-ui.js";
 import { listCodexModels, listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
 import { CodexSession } from "./codex-session.js";
+import { formatModelSummary, formatRateLimits, readCodexRuntimeStatus } from "./codex-status.js";
 import { TelegramStreamPresenter } from "./telegram-stream.js";
 import { errorMessage } from "./text.js";
 import type { StreamMode } from "./streaming.js";
@@ -86,21 +87,35 @@ export function createBot(config: AppConfig): Bot {
   bot.command("version", async (ctx) => ctx.reply(`cdxtg ${displayVersion()}`));
 
   bot.command("new", async (ctx) => {
-    await ctx.reply("Choose a workspace for the new Codex session:", {
+    const info = getSession(ctx.chat.id).info;
+    const runtime = await readCodexRuntimeStatus({
+      workspace: info.workspace,
+      ...(info.model ? { model: info.model } : {}),
+      ...(info.reasoningEffort ? { reasoningEffort: info.reasoningEffort } : {}),
+    });
+    await ctx.reply(`Model: ${formatModelSummary(runtime)}\n\nChoose a workspace for the new Codex session:`, {
       reply_markup: workspaceKeyboard(getWorkspaces()),
     });
   });
 
   bot.command("status", async (ctx) => {
     const info = getSession(ctx.chat.id).info;
+    const runtime = await readCodexRuntimeStatus({
+      workspace: info.workspace,
+      ...(info.model ? { model: info.model } : {}),
+      ...(info.reasoningEffort ? { reasoningEffort: info.reasoningEffort } : {}),
+      includeRateLimits: true,
+    });
     await ctx.reply([
       `Status: ${info.busy ? "working" : "ready"}`,
+      `Model: ${formatModelSummary(runtime)}`,
       `Workspace: ${info.workspace}`,
       `Mode: ${info.mode}`,
       `Thread: ${info.threadId ?? "new – created with the first task"}`,
-      `Model: ${info.model ?? "Codex default"}`,
-      `Reasoning: ${info.reasoningEffort ?? "model default"}`,
       `Streaming: ${getStreamMode(ctx.chat.id)}`,
+      ...(runtime.rateLimits
+        ? formatRateLimits(runtime.rateLimits)
+        : ["Limits: unavailable"]),
     ].join("\n"));
   });
 
