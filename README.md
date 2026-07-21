@@ -8,7 +8,7 @@
 
 <p align="center"><strong>Lightweight, secure control of local Codex through Telegram.</strong></p>
 
-<p align="center">Current release: <strong>1.1</strong> (<code>1.1.0</code> in npm metadata).</p>
+<p align="center">Current release: <strong>1.2</strong> (<code>1.2.0</code> in npm metadata).</p>
 
 `cdxtg` connects a private Telegram bot to Codex running on your computer or server. Start coding tasks, continue conversations, switch workspaces, and stop active tasks from your phone. Your source code and Codex authentication stay on your machine.
 

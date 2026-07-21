@@ -1,6 +1,6 @@
 {
   "name": "cdxtg",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Lightweight Telegram control surface for local OpenAI Codex",
   "type": "module",
   "private": true,

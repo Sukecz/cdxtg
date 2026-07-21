@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## 1.2 — 2026-07-21
 
-- Add a paginated `/resume` picker for recent sessions across all local Codex workspaces.
+- added a paginated `/resume` picker for recent sessions across all local Codex workspaces;
+- allowed sessions created by cdxtg, Codex CLI, and other local Codex clients to be continued through the official SDK;
+- ignored archived or stale sessions and missing workspaces while preserving the chat's current safety mode.
 
 ## 1.1 — 2026-07-21
 
