@@ -24,6 +24,7 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 - an inline workspace picker when starting a new session;
 - model and reasoning-effort pickers backed by the local Codex model cache;
 - compact effective model and available Codex rate-limit reporting in session status;
+- optional background rate-limit reset notifications and MQTT snapshots;
 - safe `read-only`, opt-in `workspace-write`, and confirmed `danger-full-access` modes;
 - cancellation of active tasks;
 - direct integration through the official TypeScript SDK without parsing CLI output;
@@ -161,8 +162,51 @@ Raw reasoning text is never sent to Telegram. Verbose command output may contain
 | `CDXTG_ENV_FILE` | `telegram.env` | Path to the local environment file |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
 | `TELEGRAM_STREAM_MODE` | `brief` | Default streaming mode: `off`, `brief`, or `verbose` |
+| `CODEX_RATE_LIMIT_POLL_SECONDS` | `0` | Background poll interval; `0` disables monitoring, otherwise minimum `30` |
+| `CODEX_RATE_LIMIT_RESET_DROP_PERCENT` | `5` | Usage decrease treated as an unscheduled reset |
+| `TELEGRAM_RATE_LIMIT_NOTIFICATIONS` | `true` | Send detected reset events to Telegram |
+| `TELEGRAM_RATE_LIMIT_CHAT_IDS` | allowlist IDs | Comma-separated notification chat IDs |
+| `MQTT_URL` | empty | Broker URL; empty disables MQTT publishing |
+| `MQTT_TOPIC` | `cdxtg/codex/rate-limits` | Snapshot publish topic without wildcards |
+| `MQTT_USERNAME` | empty | Optional broker username |
+| `MQTT_PASSWORD` | empty | Optional broker password |
+| `MQTT_QOS` | `0` | MQTT QoS: `0`, `1`, or `2` |
+| `MQTT_RETAIN` | `true` | Retain the latest snapshot on the broker |
 
 `telegram.env`, `.env`, Codex state, logs, and other secrets are ignored by Git. Only `.env.example` with nonfunctional placeholder values belongs in the repository.
+
+## Rate-limit monitoring
+
+cdxtg can poll the authenticated Codex account in the background, notify Telegram chats when a reset is detected, and publish every successful snapshot to MQTT. It uses the local Codex app-server protocol, so no Codex token is copied into cdxtg configuration.
+
+Monitoring is disabled by default. A minimal Telegram-only configuration is:
+
+```dotenv
+CODEX_RATE_LIMIT_POLL_SECONDS=60
+```
+
+Reset notifications default to every private chat ID in `TELEGRAM_ALLOWED_USER_IDS`. Use explicit chat IDs, including an authorized group chat, or disable Telegram delivery independently:
+
+```dotenv
+TELEGRAM_RATE_LIMIT_NOTIFICATIONS=true
+TELEGRAM_RATE_LIMIT_CHAT_IDS=123456789,-1001234567890
+CODEX_RATE_LIMIT_RESET_DROP_PERCENT=5
+```
+
+The monitor establishes an initial baseline without sending a notification. It then detects both a new backend reset cycle and an unscheduled usage drop at or above the configured threshold. State is intentionally in memory, so restarting cdxtg establishes a fresh baseline and does not generate a false reset alert.
+
+To publish retained JSON snapshots on every successful poll, configure MQTT:
+
+```dotenv
+MQTT_URL=mqtts://broker.example.com:8883
+MQTT_TOPIC=home/codex/rate-limits
+MQTT_USERNAME=cdxtg
+MQTT_PASSWORD=replace_me
+MQTT_QOS=1
+MQTT_RETAIN=true
+```
+
+`MQTT_URL` accepts `mqtt://`, `mqtts://`, `ws://`, or `wss://`; leaving it empty disables MQTT. The payload contains `observedAt` plus primary and secondary windows with `usedPercent`, `remainingPercent`, `windowDurationMinutes`, and an ISO `resetsAt` value. Credentials stay only in the ignored local environment file.
 
 ## Persistent systemd service
 

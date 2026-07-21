@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, parseNumericList, parseWorkspaces } from "../src/config.js";
+import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, loadConfig, parseChatIdList, parseNumericList, parseWorkspaces } from "../src/config.js";
 
 describe("parseNumericList", () => {
   it("accepts an empty discovery-mode allowlist", () => {
@@ -15,6 +15,54 @@ describe("parseNumericList", () => {
 
   it("rejects invalid IDs", () => {
     expect(() => parseNumericList("123,nope")).toThrow(/invalid ID/);
+  });
+});
+
+describe("parseChatIdList", () => {
+  it("accepts private and group chat IDs", () => {
+    expect(parseChatIdList("123,-1001234567890")).toEqual([123, -1001234567890]);
+  });
+});
+
+describe("rate-limit monitor configuration", () => {
+  it("defaults notification chats to the Telegram allowlist", () => {
+    const config = loadConfig({
+      TELEGRAM_BOT_TOKEN: "test-token",
+      TELEGRAM_ALLOWED_USER_IDS: "123,456",
+      CODEX_RATE_LIMIT_POLL_SECONDS: "60",
+    });
+
+    expect(config.rateLimitMonitor).toMatchObject({
+      intervalMs: 60_000,
+      resetDropPercent: 5,
+      telegramNotifications: true,
+      telegramChatIds: [123, 456],
+    });
+  });
+
+  it("parses an optional MQTT publisher", () => {
+    const config = loadConfig({
+      TELEGRAM_BOT_TOKEN: "test-token",
+      CODEX_RATE_LIMIT_POLL_SECONDS: "120",
+      MQTT_URL: "mqtts://broker.example.com:8883",
+      MQTT_TOPIC: "home/codex/limits",
+      MQTT_QOS: "1",
+      MQTT_RETAIN: "false",
+    });
+
+    expect(config.rateLimitMonitor.mqtt).toEqual({
+      url: "mqtts://broker.example.com:8883",
+      topic: "home/codex/limits",
+      qos: 1,
+      retain: false,
+    });
+  });
+
+  it("rejects an overly aggressive polling interval", () => {
+    expect(() => loadConfig({
+      TELEGRAM_BOT_TOKEN: "test-token",
+      CODEX_RATE_LIMIT_POLL_SECONDS: "10",
+    })).toThrow(/at least 30/);
   });
 });
 describe("parseWorkspaces", () => {

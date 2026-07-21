@@ -5,7 +5,7 @@ import type { ModelReasoningEffort } from "@openai/codex-sdk";
 
 const STATUS_TIMEOUT_MS = 8_000;
 
-interface RateLimitWindow {
+export interface RateLimitWindow {
   usedPercent: number;
   windowDurationMins: number | null;
   resetsAt: number | null;
@@ -106,7 +106,7 @@ export function formatRateLimits(snapshot: RateLimitSnapshot, locale = "en-GB"):
     });
 }
 
-function rateLimitLabel(durationMins: number | null): string {
+export function rateLimitLabel(durationMins: number | null): string {
   if (durationMins === null) return "Limit";
   if (durationMins === 10_080) return "Weekly limit";
   if (durationMins === 1_440) return "Daily limit";

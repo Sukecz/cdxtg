@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add configurable background Codex rate-limit reset notifications and optional MQTT snapshot publishing.
+
 All notable changes to this project are documented in this file.
 
 ## 1.0 — 2026-07-15

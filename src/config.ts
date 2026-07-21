@@ -16,7 +16,25 @@ export interface AppConfig {
   approvalPolicy: ApprovalMode;
   logLevel: LogLevel;
   streamMode: StreamMode;
+  rateLimitMonitor: RateLimitMonitorConfig;
   envFile?: string;
+}
+
+export interface RateLimitMonitorConfig {
+  intervalMs: number;
+  resetDropPercent: number;
+  telegramNotifications: boolean;
+  telegramChatIds: readonly number[];
+  mqtt?: MqttConfig;
+}
+
+export interface MqttConfig {
+  url: string;
+  topic: string;
+  username?: string;
+  password?: string;
+  qos: 0 | 1 | 2;
+  retain: boolean;
 }
 
 export type SafeSandboxMode = Extract<SandboxMode, "read-only" | "workspace-write" | "danger-full-access">;
@@ -41,6 +59,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const model = optional(env.CODEX_MODEL);
   const reasoningEffort = parseReasoningEffort(env.CODEX_REASONING_EFFORT);
   const streamMode = parseStreamMode(env.TELEGRAM_STREAM_MODE);
+  const rateLimitMonitor = parseRateLimitMonitorConfig(env, allowedUserIds);
 
   return {
     telegramBotToken,
@@ -54,7 +73,56 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     approvalPolicy,
     logLevel,
     streamMode,
+    rateLimitMonitor,
     ...(envFile ? { envFile } : {}),
+  };
+}
+
+function parseRateLimitMonitorConfig(
+  env: NodeJS.ProcessEnv,
+  allowedUserIds: ReadonlySet<number>,
+): RateLimitMonitorConfig {
+  const intervalSeconds = parseNumber(env.CODEX_RATE_LIMIT_POLL_SECONDS, 0, "CODEX_RATE_LIMIT_POLL_SECONDS", 0);
+  if (intervalSeconds > 0 && intervalSeconds < 30) {
+    throw new Error("CODEX_RATE_LIMIT_POLL_SECONDS must be 0 or at least 30");
+  }
+
+  const configuredChatIds = parseChatIdList(env.TELEGRAM_RATE_LIMIT_CHAT_IDS);
+  const telegramChatIds = configuredChatIds.length > 0 ? configuredChatIds : [...allowedUserIds];
+  const mqttUrl = optional(env.MQTT_URL);
+  const mqttTopic = optional(env.MQTT_TOPIC) ?? "cdxtg/codex/rate-limits";
+  if (mqttUrl && !/^(mqtt|mqtts|ws|wss):\/\//i.test(mqttUrl)) {
+    throw new Error("MQTT_URL must use mqtt://, mqtts://, ws://, or wss://");
+  }
+  if (mqttUrl && /[+#]/.test(mqttTopic)) {
+    throw new Error("MQTT_TOPIC must be a publish topic without wildcards");
+  }
+
+  return {
+    intervalMs: intervalSeconds * 1_000,
+    resetDropPercent: parseNumber(
+      env.CODEX_RATE_LIMIT_RESET_DROP_PERCENT,
+      5,
+      "CODEX_RATE_LIMIT_RESET_DROP_PERCENT",
+      0.1,
+      100,
+    ),
+    telegramNotifications: parseBoolean(
+      env.TELEGRAM_RATE_LIMIT_NOTIFICATIONS,
+      true,
+      "TELEGRAM_RATE_LIMIT_NOTIFICATIONS",
+    ),
+    telegramChatIds,
+    ...(mqttUrl ? {
+      mqtt: {
+        url: mqttUrl,
+        topic: mqttTopic,
+        ...(optional(env.MQTT_USERNAME) ? { username: optional(env.MQTT_USERNAME)! } : {}),
+        ...(optional(env.MQTT_PASSWORD) ? { password: optional(env.MQTT_PASSWORD)! } : {}),
+        qos: parseMqttQos(env.MQTT_QOS),
+        retain: parseBoolean(env.MQTT_RETAIN, true, "MQTT_RETAIN"),
+      },
+    } : {}),
   };
 }
 
@@ -151,16 +219,51 @@ function parseEnv(contents: string): Record<string, string> {
   return values;
 }
 
-export function parseNumericList(raw: string | undefined): number[] {
+export function parseNumericList(raw: string | undefined, name = "TELEGRAM_ALLOWED_USER_IDS"): number[] {
   if (!raw?.trim()) return [];
 
   return raw.split(",").map((entry) => {
     const value = Number(entry.trim());
     if (!Number.isSafeInteger(value) || value <= 0) {
-      throw new Error(`TELEGRAM_ALLOWED_USER_IDS contains an invalid ID: ${entry.trim()}`);
+      throw new Error(`${name} contains an invalid ID: ${entry.trim()}`);
     }
     return value;
   });
+}
+
+export function parseChatIdList(raw: string | undefined): number[] {
+  if (!raw?.trim()) return [];
+  return raw.split(",").map((entry) => {
+    const value = Number(entry.trim());
+    if (!Number.isSafeInteger(value) || value === 0) {
+      throw new Error(`TELEGRAM_RATE_LIMIT_CHAT_IDS contains an invalid ID: ${entry.trim()}`);
+    }
+    return value;
+  });
+}
+
+function parseNumber(
+  raw: string | undefined,
+  fallback: number,
+  name: string,
+  minimum: number,
+  maximum = Number.MAX_SAFE_INTEGER,
+): number {
+  const value = optional(raw);
+  if (!value) return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be a number from ${minimum} to ${maximum}`);
+  }
+  return parsed;
+}
+
+function parseMqttQos(raw: string | undefined): 0 | 1 | 2 {
+  const value = Number(optional(raw) ?? "0");
+  if (value !== 0 && value !== 1 && value !== 2) {
+    throw new Error("MQTT_QOS must be 0, 1, or 2");
+  }
+  return value;
 }
 
 export function parseWorkspaces(raw: string | undefined): string[] {

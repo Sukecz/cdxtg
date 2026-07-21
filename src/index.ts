@@ -1,10 +1,28 @@
 import { createBot } from "./bot.js";
 import { loadConfig } from "./config.js";
+import { readCodexRuntimeStatus } from "./codex-status.js";
+import { MqttRateLimitPublisher, RateLimitMonitor } from "./rate-limit-monitor.js";
 import { errorMessage } from "./text.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
   const bot = createBot(config);
+  const monitor = new RateLimitMonitor({
+    config: config.rateLimitMonitor,
+    read: async () => (await readCodexRuntimeStatus({
+      workspace: config.workspaces[0]!,
+      includeRateLimits: true,
+    })).rateLimits,
+    notify: async (message) => {
+      if (!config.rateLimitMonitor.telegramNotifications) return;
+      await Promise.all(config.rateLimitMonitor.telegramChatIds.map(async (chatId) => {
+        await bot.api.sendMessage(chatId, message);
+      }));
+    },
+    ...(config.rateLimitMonitor.mqtt
+      ? { publisher: new MqttRateLimitPublisher(config.rateLimitMonitor.mqtt) }
+      : {}),
+  });
 
   await bot.api.setMyCommands([
     { command: "start", description: "Welcome and access status" },
@@ -26,13 +44,18 @@ async function main(): Promise<void> {
   if (config.allowedUserIds.size === 0) {
     console.warn("The allowlist is empty. The bot will only identify users; use /id and set TELEGRAM_ALLOWED_USER_IDS.");
   }
+  monitor.start();
 
   const stop = (): void => {
     void bot.stop();
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
-  await bot.start({ drop_pending_updates: false });
+  try {
+    await bot.start({ drop_pending_updates: false });
+  } finally {
+    await monitor.stop();
+  }
 }
 
 main().catch((error) => {
