@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, loadConfig, parseChatIdList, parseNumericList, parseWorkspaces } from "../src/config.js";
+import { formatConfigSummary } from "../src/check-config.js";
 
 describe("parseNumericList", () => {
   it("accepts an empty discovery-mode allowlist", () => {
@@ -80,11 +81,40 @@ describe("rate-limit monitor configuration", () => {
     });
   });
 
+  it("rejects credentials embedded in MQTT_URL", () => {
+    expect(() => loadConfig({
+      TELEGRAM_BOT_TOKEN: "test-token",
+      MQTT_URL: "mqtt://user:password@broker.example.com",
+    })).toThrow(/MQTT_USERNAME and MQTT_PASSWORD/);
+  });
+
   it("rejects an overly aggressive polling interval", () => {
     expect(() => loadConfig({
       TELEGRAM_BOT_TOKEN: "test-token",
       CODEX_RATE_LIMIT_POLL_SECONDS: "10",
     })).toThrow(/at least 30/);
+  });
+});
+
+describe("formatConfigSummary", () => {
+  it("describes enabled features without exposing secret values", () => {
+    const config = loadConfig({
+      TELEGRAM_BOT_TOKEN: "telegram-secret-value",
+      TELEGRAM_ALLOWED_USER_IDS: "123",
+      CODEX_RATE_LIMIT_POLL_SECONDS: "900",
+      MQTT_URL: "mqtt://broker.example.com",
+      MQTT_USERNAME: "private-user",
+      MQTT_PASSWORD: "private-password",
+      MQTT_HOME_ASSISTANT_DISCOVERY: "true",
+    });
+    const summary = formatConfigSummary(config);
+
+    expect(summary).toContain("Rate-limit monitor: every 15m");
+    expect(summary).toContain("MQTT publishing: enabled");
+    expect(summary).toContain("Home Assistant discovery: enabled");
+    expect(summary).not.toContain("telegram-secret-value");
+    expect(summary).not.toContain("private-user");
+    expect(summary).not.toContain("private-password");
   });
 });
 describe("parseWorkspaces", () => {

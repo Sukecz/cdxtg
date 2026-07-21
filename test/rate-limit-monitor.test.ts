@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   createMqttPayload,
   createHomeAssistantDiscovery,
+  createHomeAssistantRemoval,
   findRateLimitResets,
   RateLimitMonitor,
   type RateLimitPublisher,
@@ -166,5 +167,27 @@ describe("createHomeAssistantDiscovery", () => {
       },
     });
     expect(payload.components.primary_remaining.value_template).toContain("value_json.limits.primary.remainingPercent");
+  });
+
+  it("omits unavailable windows and prepares removal markers for stale entities", () => {
+    const config = {
+      url: "mqtt://broker.example.com",
+      topic: "cdxtg/codex/rate-limits",
+      qos: 1 as const,
+      retain: true,
+      homeAssistantDiscovery: true,
+      homeAssistantDiscoveryPrefix: "homeassistant",
+      homeAssistantDeviceId: "cdxtg_codex",
+      homeAssistantDeviceName: "Codex Usage",
+    };
+    const snapshot: RateLimitSnapshot = { primary: initial.primary, secondary: null };
+    const discovery = JSON.parse(createHomeAssistantDiscovery(config, snapshot).payload) as Record<string, any>;
+    const removal = JSON.parse(createHomeAssistantRemoval(config, snapshot)!.payload) as Record<string, any>;
+
+    expect(Object.keys(discovery.components)).toEqual(["last_update", "primary_remaining", "primary_reset"]);
+    expect(removal.components).toEqual({
+      secondary_remaining: { platform: "sensor" },
+      secondary_reset: { platform: "sensor" },
+    });
   });
 });

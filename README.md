@@ -64,6 +64,12 @@ TELEGRAM_BOT_TOKEN=123456:replace_me
 TELEGRAM_ALLOWED_USER_IDS=
 ```
 
+Validate the file without printing tokens or passwords:
+
+```bash
+npm run config:check
+```
+
 Start the bot temporarily to discover your Telegram ID:
 
 ```bash
@@ -95,6 +101,19 @@ Separate multiple IDs or extra workspaces with commas. Every configured path mus
 
 > [!NOTE]
 > `npm start` runs the bot only in the current terminal. Use `npm run service:install` for a persistent installation.
+
+## Choose your setup
+
+Start with only the two required Telegram values. Add optional blocks later; unused features stay disabled.
+
+| Goal | Settings to add |
+|---|---|
+| Telegram access only | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ALLOWED_USER_IDS` |
+| Reset alerts in Telegram | `CODEX_RATE_LIMIT_POLL_SECONDS=900` |
+| MQTT snapshots | Poll interval plus `MQTT_URL`, and credentials when required |
+| Automatic Home Assistant entities | MQTT settings plus `MQTT_HOME_ASSISTANT_DISCOVERY=true` |
+
+Run `npm run config:check` after editing. For an installed service, apply startup-only configuration changes with `npm run service:install`. The allowlist, explicit workspaces, and write/full-access opt-ins are the only settings hot-reloaded while the bot is running.
 
 ## Telegram commands
 
@@ -179,14 +198,17 @@ Raw reasoning text is never sent to Telegram. Verbose command output may contain
 
 `telegram.env`, `.env`, Codex state, logs, and other secrets are ignored by Git. Only `.env.example` with nonfunctional placeholder values belongs in the repository.
 
+> [!IMPORTANT]
+> Never put real values in `.env.example`, source files, service units, issues, screenshots, or command output. Before committing, `git check-ignore telegram.env` should print `telegram.env`, while `git ls-files telegram.env` should print nothing. If a real credential is ever committed, removing the line is not enough: rotate the credential immediately because it remains in Git history.
+
 ## Rate-limit monitoring
 
 cdxtg can poll the authenticated Codex account in the background, notify Telegram chats when a reset is detected, and publish every successful snapshot to MQTT. It uses the local Codex app-server protocol, so no Codex token is copied into cdxtg configuration.
 
-Monitoring is disabled by default. A minimal Telegram-only configuration is:
+Monitoring is disabled by default. A practical Telegram-only configuration checks every 15 minutes:
 
 ```dotenv
-CODEX_RATE_LIMIT_POLL_SECONDS=60
+CODEX_RATE_LIMIT_POLL_SECONDS=900
 ```
 
 Reset notifications default to every private chat ID in `TELEGRAM_ALLOWED_USER_IDS`. Use explicit chat IDs, including an authorized group chat, or disable Telegram delivery independently:
@@ -213,7 +235,7 @@ MQTT_HOME_ASSISTANT_DISCOVERY=true
 
 `MQTT_URL` accepts `mqtt://`, `mqtts://`, `ws://`, or `wss://`; leaving it empty disables MQTT. The payload contains `observedAt` plus primary and secondary windows with `usedPercent`, `remainingPercent`, `windowDurationMinutes`, and an ISO `resetsAt` value. Credentials stay only in the ignored local environment file.
 
-When Home Assistant discovery is enabled, cdxtg publishes one retained MQTT device configuration under the configured discovery prefix. Home Assistant automatically creates a `Codex Usage` device with primary and secondary remaining-capacity sensors, their reset timestamps, and a last-update timestamp. The discovery prefix, stable device ID, and display name are configurable; no Home Assistant YAML is required.
+When Home Assistant discovery is enabled, cdxtg publishes one retained MQTT device configuration under the configured discovery prefix. Home Assistant automatically creates a `Codex Usage` device with remaining-capacity and reset-time sensors for each limit window actually returned by Codex, plus a last-update timestamp. User-facing names describe the real window, such as `5h remaining` or `Weekly reset`; unavailable internal slots are not exposed. The discovery prefix, stable device ID, and display name are configurable; no Home Assistant YAML is required.
 
 ## Persistent systemd service
 

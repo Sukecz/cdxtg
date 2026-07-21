@@ -18,6 +18,8 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   exit 1
 fi
 
+chmod 600 "${ENV_FILE}"
+
 if ! grep -Eq '^[[:space:]]*TELEGRAM_ALLOWED_USER_IDS[[:space:]]*=[[:space:]]*[0-9]' "${ENV_FILE}"; then
   echo "Error: TELEGRAM_ALLOWED_USER_IDS is not configured. Discover your ID with /id and add it to telegram.env first." >&2
   exit 1

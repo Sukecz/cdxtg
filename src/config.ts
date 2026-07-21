@@ -98,6 +98,12 @@ function parseRateLimitMonitorConfig(
   if (mqttUrl && !/^(mqtt|mqtts|ws|wss):\/\//i.test(mqttUrl)) {
     throw new Error("MQTT_URL must use mqtt://, mqtts://, ws://, or wss://");
   }
+  if (mqttUrl) {
+    const parsedMqttUrl = new URL(mqttUrl);
+    if (parsedMqttUrl.username || parsedMqttUrl.password) {
+      throw new Error("Keep MQTT credentials out of MQTT_URL; use MQTT_USERNAME and MQTT_PASSWORD");
+    }
+  }
   if (mqttUrl && /[+#]/.test(mqttTopic)) {
     throw new Error("MQTT_TOPIC must be a publish topic without wildcards");
   }

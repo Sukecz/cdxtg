@@ -15,6 +15,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "test": "NODE_OPTIONS=--disable-warning=ExperimentalWarning vitest run",
     "setup": "bash scripts/setup-env.sh",
+    "config:check": "tsx src/check-config.ts",
     "service:install": "bash scripts/install-user-service.sh",
     "service:uninstall": "bash scripts/uninstall-user-service.sh",
     "service:status": "systemctl --user status cdxtg.service --no-pager"

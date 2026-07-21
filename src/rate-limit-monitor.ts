@@ -149,77 +149,90 @@ export function createHomeAssistantDiscovery(
     const duration = snapshot[window]?.windowDurationMins;
     return duration === undefined ? `${window[0]!.toUpperCase()}${window.slice(1)}` : rateLimitLabel(duration).replace(/ limit$/, "");
   };
+  const components: Record<string, Record<string, unknown>> = {
+    last_update: {
+      platform: "sensor",
+      name: "Last update",
+      unique_id: `${id}_last_update`,
+      default_entity_id: "sensor.codex_last_update",
+      device_class: "timestamp",
+      icon: "mdi:update",
+      entity_category: "diagnostic",
+      value_template: "{{ value_json.observedAt }}",
+    },
+  };
+  for (const window of ["primary", "secondary"] as const) {
+    if (!snapshot[window]) continue;
+    components[`${window}_remaining`] = {
+      platform: "sensor",
+      name: `${windowName(window)} remaining`,
+      unique_id: `${id}_${window}_remaining`,
+      default_entity_id: `sensor.codex_${window}_remaining`,
+      unit_of_measurement: "%",
+      icon: "mdi:gauge",
+      entity_category: "diagnostic",
+      value_template: value(window, "remainingPercent"),
+    };
+    components[`${window}_reset`] = {
+      platform: "sensor",
+      name: `${windowName(window)} reset`,
+      unique_id: `${id}_${window}_reset`,
+      default_entity_id: `sensor.codex_${window}_reset`,
+      device_class: "timestamp",
+      icon: "mdi:clock-outline",
+      entity_category: "diagnostic",
+      value_template: value(window, "resetsAt"),
+    };
+  }
   return {
     topic: `${config.homeAssistantDiscoveryPrefix}/device/${id}/config`,
     payload: JSON.stringify({
-      device: {
-        identifiers: [id],
-        name: config.homeAssistantDeviceName,
-        manufacturer: "cdxtg",
-        model: "Codex rate-limit monitor",
-        sw_version: pkg.version,
-        configuration_url: "https://github.com/Sukecz/cdxtg",
-      },
-      origin: {
-        name: "cdxtg",
-        sw_version: pkg.version,
-        support_url: "https://github.com/Sukecz/cdxtg",
-      },
+      device: homeAssistantDevice(config),
+      origin: homeAssistantOrigin(),
       state_topic: config.topic,
       qos: config.qos,
-      components: {
-        primary_remaining: {
-          platform: "sensor",
-          name: `${windowName("primary")} remaining`,
-          unique_id: `${id}_primary_remaining`,
-          default_entity_id: "sensor.codex_primary_remaining",
-          unit_of_measurement: "%",
-          icon: "mdi:gauge",
-          entity_category: "diagnostic",
-          value_template: value("primary", "remainingPercent"),
-        },
-        primary_reset: {
-          platform: "sensor",
-          name: `${windowName("primary")} reset`,
-          unique_id: `${id}_primary_reset`,
-          default_entity_id: "sensor.codex_primary_reset",
-          device_class: "timestamp",
-          icon: "mdi:clock-outline",
-          entity_category: "diagnostic",
-          value_template: value("primary", "resetsAt"),
-        },
-        secondary_remaining: {
-          platform: "sensor",
-          name: `${windowName("secondary")} remaining`,
-          unique_id: `${id}_secondary_remaining`,
-          default_entity_id: "sensor.codex_secondary_remaining",
-          unit_of_measurement: "%",
-          icon: "mdi:gauge",
-          entity_category: "diagnostic",
-          value_template: value("secondary", "remainingPercent"),
-        },
-        secondary_reset: {
-          platform: "sensor",
-          name: `${windowName("secondary")} reset`,
-          unique_id: `${id}_secondary_reset`,
-          default_entity_id: "sensor.codex_secondary_reset",
-          device_class: "timestamp",
-          icon: "mdi:clock-outline",
-          entity_category: "diagnostic",
-          value_template: value("secondary", "resetsAt"),
-        },
-        last_update: {
-          platform: "sensor",
-          name: "Last update",
-          unique_id: `${id}_last_update`,
-          default_entity_id: "sensor.codex_last_update",
-          device_class: "timestamp",
-          icon: "mdi:update",
-          entity_category: "diagnostic",
-          value_template: "{{ value_json.observedAt }}",
-        },
-      },
+      components,
     }),
+  };
+}
+
+export function createHomeAssistantRemoval(
+  config: MqttConfig,
+  snapshot: RateLimitSnapshot,
+): { topic: string; payload: string } | null {
+  const components: Record<string, { platform: "sensor" }> = {};
+  for (const window of ["primary", "secondary"] as const) {
+    if (snapshot[window]) continue;
+    components[`${window}_remaining`] = { platform: "sensor" };
+    components[`${window}_reset`] = { platform: "sensor" };
+  }
+  if (Object.keys(components).length === 0) return null;
+  return {
+    topic: `${config.homeAssistantDiscoveryPrefix}/device/${config.homeAssistantDeviceId}/config`,
+    payload: JSON.stringify({
+      device: homeAssistantDevice(config),
+      origin: homeAssistantOrigin(),
+      components,
+    }),
+  };
+}
+
+function homeAssistantDevice(config: MqttConfig): Record<string, unknown> {
+  return {
+    identifiers: [config.homeAssistantDeviceId],
+    name: config.homeAssistantDeviceName,
+    manufacturer: "cdxtg",
+    model: "Codex rate-limit monitor",
+    sw_version: pkg.version,
+    configuration_url: "https://github.com/Sukecz/cdxtg",
+  };
+}
+
+function homeAssistantOrigin(): Record<string, unknown> {
+  return {
+    name: "cdxtg",
+    sw_version: pkg.version,
+    support_url: "https://github.com/Sukecz/cdxtg",
   };
 }
 
@@ -231,6 +244,13 @@ export class MqttRateLimitPublisher implements RateLimitPublisher {
   async publish(snapshot: RateLimitSnapshot, observedAt: Date): Promise<void> {
     const client = await this.getClient();
     if (this.config.homeAssistantDiscovery) {
+      const removal = createHomeAssistantRemoval(this.config, snapshot);
+      if (removal) {
+        await client.publishAsync(removal.topic, removal.payload, {
+          qos: this.config.qos,
+          retain: true,
+        });
+      }
       const discovery = createHomeAssistantDiscovery(this.config, snapshot);
       await client.publishAsync(discovery.topic, discovery.payload, {
         qos: this.config.qos,
