@@ -55,6 +55,28 @@ describe("rate-limit monitor configuration", () => {
       topic: "home/codex/limits",
       qos: 1,
       retain: false,
+      homeAssistantDiscovery: false,
+      homeAssistantDiscoveryPrefix: "homeassistant",
+      homeAssistantDeviceId: "cdxtg_codex",
+      homeAssistantDeviceName: "Codex Usage",
+    });
+  });
+
+  it("parses Home Assistant MQTT discovery settings", () => {
+    const config = loadConfig({
+      TELEGRAM_BOT_TOKEN: "test-token",
+      MQTT_URL: "mqtt://broker.example.com",
+      MQTT_HOME_ASSISTANT_DISCOVERY: "true",
+      MQTT_HOME_ASSISTANT_DISCOVERY_PREFIX: "ha",
+      MQTT_HOME_ASSISTANT_DEVICE_ID: "office-codex",
+      MQTT_HOME_ASSISTANT_DEVICE_NAME: "Office Codex",
+    });
+
+    expect(config.rateLimitMonitor.mqtt).toMatchObject({
+      homeAssistantDiscovery: true,
+      homeAssistantDiscoveryPrefix: "ha",
+      homeAssistantDeviceId: "office-codex",
+      homeAssistantDeviceName: "Office Codex",
     });
   });
 

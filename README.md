@@ -172,6 +172,10 @@ Raw reasoning text is never sent to Telegram. Verbose command output may contain
 | `MQTT_PASSWORD` | empty | Optional broker password |
 | `MQTT_QOS` | `0` | MQTT QoS: `0`, `1`, or `2` |
 | `MQTT_RETAIN` | `true` | Retain the latest snapshot on the broker |
+| `MQTT_HOME_ASSISTANT_DISCOVERY` | `false` | Publish a retained Home Assistant MQTT device discovery payload |
+| `MQTT_HOME_ASSISTANT_DISCOVERY_PREFIX` | `homeassistant` | Home Assistant discovery prefix |
+| `MQTT_HOME_ASSISTANT_DEVICE_ID` | `cdxtg_codex` | Stable discovery device identifier |
+| `MQTT_HOME_ASSISTANT_DEVICE_NAME` | `Codex Usage` | Device name shown in Home Assistant |
 
 `telegram.env`, `.env`, Codex state, logs, and other secrets are ignored by Git. Only `.env.example` with nonfunctional placeholder values belongs in the repository.
 
@@ -204,9 +208,12 @@ MQTT_USERNAME=cdxtg
 MQTT_PASSWORD=replace_me
 MQTT_QOS=1
 MQTT_RETAIN=true
+MQTT_HOME_ASSISTANT_DISCOVERY=true
 ```
 
 `MQTT_URL` accepts `mqtt://`, `mqtts://`, `ws://`, or `wss://`; leaving it empty disables MQTT. The payload contains `observedAt` plus primary and secondary windows with `usedPercent`, `remainingPercent`, `windowDurationMinutes`, and an ISO `resetsAt` value. Credentials stay only in the ignored local environment file.
+
+When Home Assistant discovery is enabled, cdxtg publishes one retained MQTT device configuration under the configured discovery prefix. Home Assistant automatically creates a `Codex Usage` device with primary and secondary remaining-capacity sensors, their reset timestamps, and a last-update timestamp. The discovery prefix, stable device ID, and display name are configurable; no Home Assistant YAML is required.
 
 ## Persistent systemd service
 

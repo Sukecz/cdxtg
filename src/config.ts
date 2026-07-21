@@ -35,6 +35,10 @@ export interface MqttConfig {
   password?: string;
   qos: 0 | 1 | 2;
   retain: boolean;
+  homeAssistantDiscovery: boolean;
+  homeAssistantDiscoveryPrefix: string;
+  homeAssistantDeviceId: string;
+  homeAssistantDeviceName: string;
 }
 
 export type SafeSandboxMode = Extract<SandboxMode, "read-only" | "workspace-write" | "danger-full-access">;
@@ -97,6 +101,14 @@ function parseRateLimitMonitorConfig(
   if (mqttUrl && /[+#]/.test(mqttTopic)) {
     throw new Error("MQTT_TOPIC must be a publish topic without wildcards");
   }
+  const homeAssistantDiscoveryPrefix = optional(env.MQTT_HOME_ASSISTANT_DISCOVERY_PREFIX) ?? "homeassistant";
+  if (/[+#]/.test(homeAssistantDiscoveryPrefix)) {
+    throw new Error("MQTT_HOME_ASSISTANT_DISCOVERY_PREFIX must not contain wildcards");
+  }
+  const homeAssistantDeviceId = optional(env.MQTT_HOME_ASSISTANT_DEVICE_ID) ?? "cdxtg_codex";
+  if (!/^[A-Za-z0-9_-]+$/.test(homeAssistantDeviceId)) {
+    throw new Error("MQTT_HOME_ASSISTANT_DEVICE_ID may contain only letters, numbers, underscores, and hyphens");
+  }
 
   return {
     intervalMs: intervalSeconds * 1_000,
@@ -121,6 +133,14 @@ function parseRateLimitMonitorConfig(
         ...(optional(env.MQTT_PASSWORD) ? { password: optional(env.MQTT_PASSWORD)! } : {}),
         qos: parseMqttQos(env.MQTT_QOS),
         retain: parseBoolean(env.MQTT_RETAIN, true, "MQTT_RETAIN"),
+        homeAssistantDiscovery: parseBoolean(
+          env.MQTT_HOME_ASSISTANT_DISCOVERY,
+          false,
+          "MQTT_HOME_ASSISTANT_DISCOVERY",
+        ),
+        homeAssistantDiscoveryPrefix,
+        homeAssistantDeviceId,
+        homeAssistantDeviceName: optional(env.MQTT_HOME_ASSISTANT_DEVICE_NAME) ?? "Codex Usage",
       },
     } : {}),
   };

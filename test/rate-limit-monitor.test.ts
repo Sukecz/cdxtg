@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createMqttPayload,
+  createHomeAssistantDiscovery,
   findRateLimitResets,
   RateLimitMonitor,
   type RateLimitPublisher,
@@ -128,5 +129,42 @@ describe("createMqttPayload", () => {
       },
     });
     expect(payload.limits.primary.resetsAt).toBe("2023-11-14T22:13:20.000Z");
+  });
+});
+
+describe("createHomeAssistantDiscovery", () => {
+  it("creates one retained-device payload with stable sensor IDs", () => {
+    const discovery = createHomeAssistantDiscovery({
+      url: "mqtt://broker.example.com",
+      topic: "cdxtg/codex/rate-limits",
+      qos: 1,
+      retain: true,
+      homeAssistantDiscovery: true,
+      homeAssistantDiscoveryPrefix: "homeassistant",
+      homeAssistantDeviceId: "cdxtg_codex",
+      homeAssistantDeviceName: "Codex Usage",
+    }, initial);
+    const payload = JSON.parse(discovery.payload) as Record<string, any>;
+
+    expect(discovery.topic).toBe("homeassistant/device/cdxtg_codex/config");
+    expect(payload).toMatchObject({
+      device: { identifiers: ["cdxtg_codex"], name: "Codex Usage" },
+      origin: { name: "cdxtg" },
+      state_topic: "cdxtg/codex/rate-limits",
+      qos: 1,
+      components: {
+        primary_remaining: {
+          platform: "sensor",
+          name: "5h remaining",
+          unique_id: "cdxtg_codex_primary_remaining",
+          default_entity_id: "sensor.codex_primary_remaining",
+        },
+        last_update: {
+          platform: "sensor",
+          device_class: "timestamp",
+        },
+      },
+    });
+    expect(payload.components.primary_remaining.value_template).toContain("value_json.limits.primary.remainingPercent");
   });
 });

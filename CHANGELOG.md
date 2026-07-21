@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Add configurable background Codex rate-limit reset notifications and optional MQTT snapshot publishing.
+- Add optional Home Assistant MQTT device discovery for Codex usage and reset sensors.
 
 All notable changes to this project are documented in this file.
 
