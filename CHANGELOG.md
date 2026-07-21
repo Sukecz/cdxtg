@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased
+## 1.1 — 2026-07-21
 
-- Add configurable background Codex rate-limit reset notifications and optional MQTT snapshot publishing.
-- Add optional Home Assistant MQTT device discovery for Codex usage and reset sensors.
-- Improve guided configuration, add a secret-safe config check, and scan Git history for secrets in CI.
+- added configurable background Codex rate-limit reset notifications and optional MQTT snapshot publishing;
+- added Home Assistant MQTT discovery with friendly sensors for the limit windows actually returned by Codex;
+- improved guided configuration and added a secret-safe `npm run config:check` summary;
+- added automatic Git-history secret scanning to CI and hardened local environment-file handling.
 
 All notable changes to this project are documented in this file.
 
