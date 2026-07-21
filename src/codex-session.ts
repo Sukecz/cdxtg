@@ -39,6 +39,14 @@ export class CodexSession {
     this.currentThreadId = null;
   }
 
+  resume(threadId: string, workspace: string): void {
+    if (this.busy) throw new Error("Stop the running task with /stop first.");
+    if (!threadId) throw new Error("Cannot resume a session without a thread ID.");
+    this.options = { ...this.options, workspace };
+    this.thread = this.codex.resumeThread(threadId, this.resumeThreadOptions());
+    this.currentThreadId = threadId;
+  }
+
   stop(): boolean {
     if (!this.abortController) return false;
     this.abortController.abort();
@@ -85,6 +93,20 @@ export class CodexSession {
       skipGitRepoCheck: true,
       ...(this.options.model ? { model: this.options.model } : {}),
       ...(this.options.reasoningEffort ? { modelReasoningEffort: this.options.reasoningEffort } : {}),
+    };
+  }
+
+  private resumeThreadOptions(): {
+    workingDirectory: string;
+    sandboxMode: Extract<SandboxMode, "read-only" | "workspace-write" | "danger-full-access">;
+    approvalPolicy: ApprovalMode;
+    skipGitRepoCheck: true;
+  } {
+    return {
+      workingDirectory: this.options.workspace,
+      sandboxMode: this.options.mode,
+      approvalPolicy: this.options.approvalPolicy,
+      skipGitRepoCheck: true,
     };
   }
 }

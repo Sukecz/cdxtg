@@ -1,8 +1,8 @@
 import { Bot, GrammyError, HttpError, type Context } from "grammy";
 import type { ModelReasoningEffort } from "@openai/codex-sdk";
 import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, type AppConfig, type SafeSandboxMode } from "./config.js";
-import { fullAccessKeyboard, modelKeyboard, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, streamModeKeyboard, workspaceKeyboard } from "./bot-ui.js";
-import { listCodexModels, listCodexWorkspaces, mergeWorkspaceLists } from "./codex-state.js";
+import { fullAccessKeyboard, modelKeyboard, parseResumeCallback, parseResumePageCallback, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, resumeKeyboard, streamModeKeyboard, workspaceKeyboard } from "./bot-ui.js";
+import { listCodexModels, listCodexThreads, listCodexWorkspaces, mergeWorkspaceLists, type CodexThreadSummary } from "./codex-state.js";
 import { CodexSession } from "./codex-session.js";
 import { formatModelSummary, formatNewSessionSummary, formatRateLimits, readCodexRuntimeStatus } from "./codex-status.js";
 import { TelegramStreamPresenter } from "./telegram-stream.js";
@@ -15,6 +15,7 @@ const HELP = `cdxtg commands:
 /help – show this command reference
 /id – show your Telegram user ID and chat ID
 /new – choose a workspace and start a new Codex session
+/resume – continue a recent local Codex session
 /status – show the current session
 /workspace – list allowed workspaces
 /workspace 2 – switch to workspace number 2
@@ -34,6 +35,7 @@ export function createBot(config: AppConfig): Bot {
   const sessions = new Map<number, CodexSession>();
   const streamModes = new Map<number, StreamMode>();
   const pendingModels = new Map<number, { slug: string; displayName: string }>();
+  const resumeLists = new Map<number, readonly CodexThreadSummary[]>();
   const isAllowedUser = createAllowedUserChecker(config.allowedUserIds, config.envFile);
   const getConfiguredWorkspaces = createWorkspaceProvider(config.workspaces, config.envFile);
   const getWorkspaces = (): readonly string[] => mergeWorkspaceLists(
@@ -95,6 +97,22 @@ export function createBot(config: AppConfig): Bot {
     });
     await ctx.reply(`Model: ${formatModelSummary(runtime)}\n\nChoose a workspace for the new Codex session:`, {
       reply_markup: workspaceKeyboard(getWorkspaces()),
+    });
+  });
+
+  bot.command("resume", async (ctx) => {
+    if (getSession(ctx.chat.id).busy) {
+      await ctx.reply("Cannot resume another session while a task is running.");
+      return;
+    }
+    const threads = listCodexThreads();
+    if (threads.length === 0) {
+      await ctx.reply("No resumable Codex sessions were found in local history.");
+      return;
+    }
+    resumeLists.set(ctx.chat.id, threads);
+    await ctx.reply("Choose a recent Codex session from any available workspace:", {
+      reply_markup: resumeKeyboard(threads),
     });
   });
 
@@ -258,6 +276,51 @@ export function createBot(config: AppConfig): Bot {
     }
     getSession(ctx.chat.id).reset({ mode });
     await ctx.reply(`New mode: ${mode}. Started a new Codex session.`);
+  });
+
+  bot.callbackQuery("resume-page:noop", async (ctx) => {
+    await ctx.answerCallbackQuery();
+  });
+
+  bot.callbackQuery(/^resume-page:(\d+)$/, async (ctx) => {
+    if (!ctx.chat) return;
+    const threads = resumeLists.get(ctx.chat.id);
+    const page = parseResumePageCallback(ctx.callbackQuery.data);
+    if (!threads || page === null) {
+      await ctx.answerCallbackQuery({ text: "This session list expired. Use /resume again.", show_alert: true });
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageReplyMarkup({ reply_markup: resumeKeyboard(threads, page) });
+  });
+
+  bot.callbackQuery(/^resume:(\d+)$/, async (ctx) => {
+    if (!ctx.chat) return;
+    const threads = resumeLists.get(ctx.chat.id);
+    const index = parseResumeCallback(ctx.callbackQuery.data);
+    const selected = index === null ? undefined : threads?.[index];
+    if (!selected) {
+      await ctx.answerCallbackQuery({ text: "This session list expired. Use /resume again.", show_alert: true });
+      return;
+    }
+    const current = listCodexThreads().find((thread) => thread.id === selected.id && thread.workspace === selected.workspace);
+    if (!current) {
+      await ctx.answerCallbackQuery({ text: "This Codex session is no longer available.", show_alert: true });
+      return;
+    }
+    try {
+      getSession(ctx.chat.id).resume(current.id, current.workspace);
+      resumeLists.delete(ctx.chat.id);
+      await ctx.answerCallbackQuery({ text: "Session resumed" });
+      await ctx.editMessageText([
+        "Resumed Codex session.",
+        `Title: ${current.title}`,
+        `Workspace: ${current.workspace}`,
+        "Send a message to continue.",
+      ].join("\n"));
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
+    }
   });
 
   bot.callbackQuery("mode:full:confirm", async (ctx) => {

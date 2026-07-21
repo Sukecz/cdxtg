@@ -29,6 +29,7 @@ async function main(): Promise<void> {
     { command: "help", description: "Command reference" },
     { command: "id", description: "Telegram user ID a chat ID" },
     { command: "new", description: "Choose workspace and start a session" },
+    { command: "resume", description: "Continue a recent Codex session" },
     { command: "status", description: "Show the current session" },
     { command: "workspace", description: "Select a workspace" },
     { command: "model", description: "Select model and reasoning" },

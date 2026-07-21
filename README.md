@@ -24,6 +24,7 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 - `off`, `brief`, and `verbose` streaming modes with throttled updates;
 - automatic workspace discovery from local Codex thread history;
 - an inline workspace picker when starting a new session;
+- a paginated `/resume` picker for local Codex sessions from any available workspace;
 - model and reasoning-effort pickers backed by the local Codex model cache;
 - compact effective model and available Codex rate-limit reporting in session status;
 - optional background rate-limit reset notifications and MQTT snapshots;
@@ -127,6 +128,7 @@ Every regular text message becomes a Codex prompt.
 | `/help` | Command reference |
 | `/id` | Show your Telegram user ID and chat ID |
 | `/new` | Show the effective model, choose a workspace, and start a new session |
+| `/resume` | Continue a recent local Codex session created by cdxtg, Codex CLI, or another local Codex client |
 | `/status` | Show session details, the effective model, and available Codex rate limits |
 | `/workspace` | Open the workspace picker |
 | `/workspace 2` | Switch to the second workspace and start a new session |
@@ -148,6 +150,8 @@ Add form validation and verify it with a test.
 ```
 
 `/new` and `/workspace` display a paginated inline picker. Like TeleCodex, cdxtg reads unique active workspace paths from the latest local `~/.codex/state_*.sqlite` database. Explicit `CODEX_WORKSPACES` entries are merged into this list. Missing and duplicate paths are removed automatically.
+
+`/resume` displays recent non-archived sessions across all workspaces in the same local Codex home. Selecting one restores its original existing workspace and continues it through the official SDK. Sessions created by cdxtg, Codex CLI, and other local Codex clients are eligible. Stale session files and missing workspace paths are ignored, and Telegram never supplies a path or thread ID directly.
 
 Changing the workspace or mode starts a fresh Codex session. Extra workspace configuration is hot-reloaded from `telegram.env`, so adding a path does not require a restart.
 

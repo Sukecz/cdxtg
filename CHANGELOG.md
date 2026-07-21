@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Add a paginated `/resume` picker for recent sessions across all local Codex workspaces.
+
 ## 1.1 — 2026-07-21
 
 - added configurable background Codex rate-limit reset notifications and optional MQTT snapshot publishing;
