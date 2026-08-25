@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- limited Telegram rate-limit reset notifications to the full weekly window while retaining shorter windows in status and MQTT output.
+
 ## 1.2 — 2026-07-21
 
 - added a paginated `/resume` picker for recent sessions across all local Codex workspaces;

@@ -188,8 +188,8 @@ Raw reasoning text is never sent to Telegram. Verbose command output may contain
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
 | `TELEGRAM_STREAM_MODE` | `brief` | Default streaming mode: `off`, `brief`, or `verbose` |
 | `CODEX_RATE_LIMIT_POLL_SECONDS` | `0` | Background poll interval; `0` disables monitoring, otherwise minimum `30` |
-| `CODEX_RATE_LIMIT_RESET_DROP_PERCENT` | `5` | Usage decrease treated as an unscheduled reset |
-| `TELEGRAM_RATE_LIMIT_NOTIFICATIONS` | `true` | Send detected reset events to Telegram |
+| `CODEX_RATE_LIMIT_RESET_DROP_PERCENT` | `5` | Weekly usage decrease treated as an unscheduled reset |
+| `TELEGRAM_RATE_LIMIT_NOTIFICATIONS` | `true` | Send detected weekly reset events to Telegram |
 | `TELEGRAM_RATE_LIMIT_CHAT_IDS` | allowlist IDs | Comma-separated notification chat IDs |
 | `MQTT_URL` | empty | Broker URL; empty disables MQTT publishing |
 | `MQTT_TOPIC` | `cdxtg/codex/rate-limits` | Snapshot publish topic without wildcards |
@@ -209,7 +209,7 @@ Raw reasoning text is never sent to Telegram. Verbose command output may contain
 
 ## Rate-limit monitoring
 
-cdxtg can poll the authenticated Codex account in the background, notify Telegram chats when a reset is detected, and publish every successful snapshot to MQTT. It uses the local Codex app-server protocol, so no Codex token is copied into cdxtg configuration.
+cdxtg can poll the authenticated Codex account in the background, notify Telegram chats when the full weekly limit resets, and publish every successful snapshot to MQTT. It uses the local Codex app-server protocol, so no Codex token is copied into cdxtg configuration.
 
 Monitoring is disabled by default. A practical Telegram-only configuration checks every 15 minutes:
 
@@ -225,7 +225,7 @@ TELEGRAM_RATE_LIMIT_CHAT_IDS=123456789,-1001234567890
 CODEX_RATE_LIMIT_RESET_DROP_PERCENT=5
 ```
 
-The monitor establishes an initial baseline without sending a notification. It then detects both a new backend reset cycle and an unscheduled usage drop at or above the configured threshold. State is intentionally in memory, so restarting cdxtg establishes a fresh baseline and does not generate a false reset alert.
+The monitor establishes an initial baseline without sending a notification. It then detects both a new backend reset cycle and an unscheduled usage drop at or above the configured threshold for the full seven-day window. Shorter windows, such as the 5h limit, remain visible in `/status` and MQTT but do not generate Telegram reset notifications. State is intentionally in memory, so restarting cdxtg establishes a fresh baseline and does not generate a false reset alert.
 
 To publish retained JSON snapshots on every successful poll, configure MQTT:
 

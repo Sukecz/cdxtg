@@ -4,6 +4,7 @@ import { rateLimitLabel, type RateLimitSnapshot, type RateLimitWindow } from "./
 import pkg from "../package.json" with { type: "json" };
 
 type WindowName = "primary" | "secondary";
+const WEEKLY_WINDOW_DURATION_MINS = 7 * 24 * 60;
 
 export interface RateLimitReset {
   window: WindowName;
@@ -100,6 +101,10 @@ export function findRateLimitResets(
     const before = previous[window];
     const after = current[window];
     if (!before || !after) return [];
+    if (
+      before.windowDurationMins !== WEEKLY_WINDOW_DURATION_MINS
+      || after.windowDurationMins !== WEEKLY_WINDOW_DURATION_MINS
+    ) return [];
     const cycleAdvanced = before.resetsAt !== null
       && after.resetsAt !== null
       && after.resetsAt > before.resetsAt

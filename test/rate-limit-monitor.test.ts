@@ -15,26 +15,35 @@ const initial: RateLimitSnapshot = {
 };
 
 describe("findRateLimitResets", () => {
-  it("detects a new reset cycle", () => {
+  it("detects a new weekly reset cycle", () => {
+    const current: RateLimitSnapshot = {
+      primary: initial.primary,
+      secondary: { usedPercent: 0, windowDurationMins: 10_080, resetsAt: 1_701_104_800 },
+    };
+
+    expect(findRateLimitResets(initial, current, 5)).toEqual([{
+      window: "secondary",
+      previous: initial.secondary,
+      current: current.secondary,
+    }]);
+  });
+
+  it("detects an unscheduled weekly reset from a meaningful usage drop", () => {
+    const current: RateLimitSnapshot = {
+      primary: initial.primary,
+      secondary: { usedPercent: 20, windowDurationMins: 10_080, resetsAt: initial.secondary!.resetsAt },
+    };
+
+    expect(findRateLimitResets(initial, current, 5)).toHaveLength(1);
+  });
+
+  it("ignores a 5h reset", () => {
     const current: RateLimitSnapshot = {
       primary: { usedPercent: 0, windowDurationMins: 300, resetsAt: 1_700_018_000 },
       secondary: initial.secondary,
     };
 
-    expect(findRateLimitResets(initial, current, 5)).toEqual([{
-      window: "primary",
-      previous: initial.primary,
-      current: current.primary,
-    }]);
-  });
-
-  it("detects an unscheduled reset from a meaningful usage drop", () => {
-    const current: RateLimitSnapshot = {
-      primary: { usedPercent: 20, windowDurationMins: 300, resetsAt: initial.primary!.resetsAt },
-      secondary: initial.secondary,
-    };
-
-    expect(findRateLimitResets(initial, current, 5)).toHaveLength(1);
+    expect(findRateLimitResets(initial, current, 5)).toEqual([]);
   });
 
   it("ignores normal usage growth and small fluctuations", () => {
@@ -83,8 +92,8 @@ describe("RateLimitMonitor", () => {
 
   it("notifies after a reset and continues MQTT publishing", async () => {
     const reset: RateLimitSnapshot = {
-      primary: { usedPercent: 0, windowDurationMins: 300, resetsAt: 1_700_018_000 },
-      secondary: initial.secondary,
+      primary: initial.primary,
+      secondary: { usedPercent: 0, windowDurationMins: 10_080, resetsAt: 1_701_104_800 },
     };
     const snapshots = [initial, reset];
     const notify = vi.fn(async () => undefined);
@@ -109,7 +118,7 @@ describe("RateLimitMonitor", () => {
     await monitor.pollOnce();
 
     expect(notify).toHaveBeenCalledOnce();
-    expect(notify).toHaveBeenCalledWith(expect.stringContaining("5h limit reset detected"));
+    expect(notify).toHaveBeenCalledWith(expect.stringContaining("weekly limit reset detected"));
     expect(publisher.publish).toHaveBeenCalledTimes(2);
   });
 });
