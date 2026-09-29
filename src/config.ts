@@ -344,8 +344,8 @@ function parseLogLevel(raw: string | undefined): LogLevel {
 function parseReasoningEffort(raw: string | undefined): ModelReasoningEffort | undefined {
   const value = optional(raw);
   if (!value) return undefined;
-  if (!(["minimal", "low", "medium", "high", "xhigh"] as const).includes(value as ModelReasoningEffort)) {
-    throw new Error("CODEX_REASONING_EFFORT must be minimal, low, medium, high, or xhigh");
+  if (!(new Set<string>(["minimal", "low", "medium", "high", "xhigh", "max"])).has(value)) {
+    throw new Error("CODEX_REASONING_EFFORT must be minimal, low, medium, high, xhigh, or max");
   }
   return value as ModelReasoningEffort;
 }

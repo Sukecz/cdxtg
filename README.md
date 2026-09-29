@@ -129,11 +129,11 @@ Every regular text message becomes a Codex prompt.
 | `/id` | Show your Telegram user ID and chat ID |
 | `/new` | Show the effective model, choose a workspace, and start a new session |
 | `/resume` | Continue a recent local Codex session created by cdxtg, Codex CLI, or another local Codex client |
-| `/status` | Show session details, the effective model, and available Codex rate limits |
+| `/status` | Show session details, a CLI resume command, the effective model, and available Codex rate limits |
 | `/workspace` | Open the workspace picker |
 | `/workspace 2` | Switch to the second workspace and start a new session |
 | `/model` | Select a Codex model, then its reasoning effort, in one flow |
-| `/reasoning` | Change only the reasoning effort (`minimal` through `xhigh`) |
+| `/reasoning` | Change only the reasoning effort (`minimal` through `max`, where supported by the model) |
 | `/stream` | Select `off`, `brief`, or `verbose` streaming |
 | `/mode readonly` | Start a new read-only session |
 | `/mode write` | Start a session that may write inside the workspace |
@@ -152,6 +152,8 @@ Add form validation and verify it with a test.
 `/new` and `/workspace` display a paginated inline picker. Like TeleCodex, cdxtg reads unique active workspace paths from the latest local `~/.codex/state_*.sqlite` database. Explicit `CODEX_WORKSPACES` entries are merged into this list. Missing and duplicate paths are removed automatically.
 
 `/resume` displays recent non-archived sessions across all workspaces in the same local Codex home. Selecting one restores its original existing workspace and continues it through the official SDK. Sessions created by cdxtg, Codex CLI, and other local Codex clients are eligible. Stale session files and missing workspace paths are ignored, and Telegram never supplies a path or thread ID directly.
+
+To continue a Telegram session from a desktop terminal connected to the **same host and user account** over SSH, open the workspace and run `/status` in Telegram. Copy its `codex resume <thread-id>` command into that terminal. To browse Telegram sessions in the CLI picker, use `codex resume --include-non-interactive`; the plain picker hides SDK sessions because they are recorded as non-interactive turns. After a CLI turn ends, the same thread can continue in Telegram. The session history lives in that host's Codex home, so opening a separate local Codex installation on another computer will not show it.
 
 Changing the workspace or mode starts a fresh Codex session. Extra workspace configuration is hot-reloaded from `telegram.env`, so adding a path does not require a restart.
 
@@ -179,7 +181,7 @@ Raw reasoning text is never sent to Telegram. Verbose command output may contain
 | `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated numeric Telegram user IDs; hot-reloaded at runtime |
 | `CODEX_WORKSPACES` | current directory | Optional extra paths merged with workspaces found in Codex history |
 | `CODEX_MODEL` | Codex default | Optional model passed to the SDK |
-| `CODEX_REASONING_EFFORT` | model default | `minimal`, `low`, `medium`, `high`, or `xhigh` |
+| `CODEX_REASONING_EFFORT` | model default | `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` (subject to model support) |
 | `CODEX_DEFAULT_MODE` | `read-only` | `read-only`, `workspace-write`, or `danger-full-access` |
 | `CODEX_ENABLE_WRITE` | `false` | Enables switching to write mode; hot-reloaded at runtime |
 | `CODEX_ENABLE_FULL_ACCESS` | `false` | Enables confirmed `/mode full`; hot-reloaded at runtime |

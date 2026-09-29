@@ -30,7 +30,7 @@ const HELP = `cdxtg commands:
 
 Send any regular text message to give Codex a task.`;
 
-export function createBot(config: AppConfig): Bot {
+export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } {
   const bot = new Bot(config.telegramBotToken);
   const sessions = new Map<number, CodexSession>();
   const streamModes = new Map<number, StreamMode>();
@@ -130,6 +130,7 @@ export function createBot(config: AppConfig): Bot {
       `Workspace: ${info.workspace}`,
       `Mode: ${info.mode}`,
       `Thread: ${info.threadId ?? "new – created with the first task"}`,
+      ...(info.threadId ? [`Continue in Codex CLI: codex resume ${info.threadId}`] : []),
       `Streaming: ${getStreamMode(ctx.chat.id)}`,
       ...(runtime.rateLimits
         ? formatRateLimits(runtime.rateLimits)
@@ -379,7 +380,7 @@ export function createBot(config: AppConfig): Bot {
     }
   });
 
-  bot.callbackQuery(/^reasoning:(minimal|low|medium|high|xhigh)$/, async (ctx) => {
+  bot.callbackQuery(/^reasoning:(minimal|low|medium|high|xhigh|max)$/, async (ctx) => {
     if (!ctx.chat) return;
     const effort = ctx.match[1] as ModelReasoningEffort;
     try {
@@ -413,29 +414,39 @@ export function createBot(config: AppConfig): Bot {
     await ctx.reply(stopped ? "Stopping the running task…" : "No task is running in this chat.");
   });
 
-  bot.on("message:text", async (ctx) => {
+  bot.on("message:text", (ctx) => {
     const prompt = ctx.message.text.trim();
     if (!prompt || prompt.startsWith("/")) return;
     const session = getSession(ctx.chat.id);
-    const presenter = new TelegramStreamPresenter(ctx, getStreamMode(ctx.chat.id));
-
-    const typing = setInterval(() => {
-      void ctx.replyWithChatAction("typing").catch(() => undefined);
-    }, 4_000);
-    typing.unref();
-
-    try {
-      await presenter.start();
-      await ctx.replyWithChatAction("typing");
-      const result = await session.run(prompt, (event) => presenter.onEvent(event));
-      await presenter.complete(result.text);
-    } catch (error) {
-      const message = errorMessage(error);
-      if (/abort/i.test(message)) await presenter.fail("The task was stopped.");
-      else await presenter.fail(message.slice(0, 3500));
-    } finally {
-      clearInterval(typing);
+    if (session.busy) {
+      return ctx.reply("A task is already running in this chat. Wait or use /stop.");
     }
+    const presenter = new TelegramStreamPresenter(ctx, getStreamMode(ctx.chat.id));
+    // Start the SDK turn before returning to grammY's polling loop so /stop can
+    // arrive while Codex is working, including during Telegram preview setup.
+    const run = session.run(prompt, (event) => presenter.onEvent(event));
+    void run.catch(() => undefined);
+
+    void (async () => {
+      const typing = setInterval(() => {
+        void ctx.replyWithChatAction("typing").catch(() => undefined);
+      }, 4_000);
+      typing.unref();
+
+      try {
+        await presenter.start();
+        await ctx.replyWithChatAction("typing");
+        const result = await run;
+        await presenter.complete(result.text);
+      } catch (error) {
+        session.stop();
+        const message = errorMessage(error);
+        if (/abort/i.test(message)) await presenter.complete("The task was stopped.");
+        else await presenter.fail(message.slice(0, 3500));
+      } finally {
+        clearInterval(typing);
+      }
+    })().catch((error) => console.error("Could not finish Codex task presentation", errorMessage(error)));
   });
 
   bot.catch(({ error, ctx }) => {
@@ -444,7 +455,11 @@ export function createBot(config: AppConfig): Bot {
     else console.error(`Bot error for update ${ctx.update.update_id}`, error);
   });
 
-  return bot;
+  return Object.assign(bot, {
+    stopActiveTurns(): void {
+      for (const session of sessions.values()) session.stop();
+    },
+  });
 }
 
 function displayVersion(): string {

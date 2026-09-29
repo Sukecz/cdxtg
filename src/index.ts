@@ -48,6 +48,7 @@ async function main(): Promise<void> {
   monitor.start();
 
   const stop = (): void => {
+    bot.stopActiveTurns();
     void bot.stop();
   };
   process.once("SIGINT", stop);

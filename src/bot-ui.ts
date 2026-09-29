@@ -71,7 +71,7 @@ export function modelKeyboard(models: readonly CodexModel[], currentModel?: stri
 }
 
 export function reasoningKeyboard(current?: ModelReasoningEffort): InlineKeyboard {
-  const efforts: ModelReasoningEffort[] = ["minimal", "low", "medium", "high", "xhigh"];
+  const efforts: ModelReasoningEffort[] = ["minimal", "low", "medium", "high", "xhigh", "max"];
   const keyboard = new InlineKeyboard();
   efforts.forEach((effort) => {
     keyboard.text(`${effort}${effort === current ? " ✓" : ""}`, `reasoning:${effort}`);
