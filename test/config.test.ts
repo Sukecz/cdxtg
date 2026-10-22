@@ -5,6 +5,12 @@ import { describe, expect, it } from "vitest";
 import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, loadConfig, parseChatIdList, parseNumericList, parseWorkspaces } from "../src/config.js";
 import { formatConfigSummary } from "../src/check-config.js";
 
+describe("App Server approval policy", () => {
+  it("rejects the removed on-failure policy with migration guidance", () => {
+    expect(() => loadConfig({ TELEGRAM_BOT_TOKEN: "test-token", CODEX_APPROVAL_POLICY: "on-failure" })).toThrow("legacy on-failure policy is no longer supported");
+  });
+});
+
 describe("parseNumericList", () => {
   it("accepts an empty discovery-mode allowlist", () => {
     expect(parseNumericList(undefined)).toEqual([]);

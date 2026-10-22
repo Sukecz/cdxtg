@@ -1,9 +1,9 @@
-import { Bot, GrammyError, HttpError, type Context } from "grammy";
+import { Bot, GrammyError, HttpError, InlineKeyboard, type Context } from "grammy";
 import type { ModelReasoningEffort } from "@openai/codex-sdk";
 import { createAllowedUserChecker, createBooleanSettingProvider, createWorkspaceProvider, type AppConfig, type SafeSandboxMode } from "./config.js";
 import { fullAccessKeyboard, modelKeyboard, parseResumeCallback, parseResumePageCallback, parseWorkspaceCallback, parseWorkspacePageCallback, reasoningKeyboard, resumeKeyboard, streamModeKeyboard, workspaceKeyboard } from "./bot-ui.js";
 import { listCodexModels, listCodexThreads, listCodexWorkspaces, mergeWorkspaceLists, type CodexThreadSummary } from "./codex-state.js";
-import { CodexSession } from "./codex-session.js";
+import { CodexSession, type QuestionPrompt, type SessionOptions } from "./codex-session.js";
 import { formatModelSummary, formatNewSessionSummary, formatRateLimits, readCodexRuntimeStatus } from "./codex-status.js";
 import { TelegramStreamPresenter } from "./telegram-stream.js";
 import { errorMessage } from "./text.js";
@@ -28,9 +28,9 @@ const HELP = `cdxtg commands:
 /stop – stop the running task
 /version – show the cdxtg version
 
-Send any regular text message to give Codex a task. During a task, send a reply or correction to interrupt and continue the same session.`;
+Send any regular text message to give Codex a task. During a task, send a reply or correction to steer the running task. Answer Codex questions with a button or a text message.`;
 
-export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } {
+export function createBot(config: AppConfig, createSession: (options: SessionOptions) => CodexSession = (options) => new CodexSession(options)): Bot & { stopActiveTurns(): void } {
   const bot = new Bot(config.telegramBotToken);
   const sessions = new Map<number, CodexSession>();
   const streamModes = new Map<number, StreamMode>();
@@ -49,7 +49,7 @@ export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } 
   const getSession = (chatId: number): CodexSession => {
     let session = sessions.get(chatId);
     if (!session) {
-      session = new CodexSession({
+      session = createSession({
         workspace: getWorkspaces()[0]!,
         mode: config.defaultMode,
         approvalPolicy: config.approvalPolicy,
@@ -415,23 +415,78 @@ export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } 
     await ctx.reply(stopped ? "Stopping the running task…" : "No task is running in this chat.");
   });
 
-  bot.on("message:text", (ctx) => {
-    const prompt = ctx.message.text.trim();
-    if (!prompt || prompt.startsWith("/")) return;
+  const choices = new Map<string, { chatId: number; userId: number; threadId: string | null; question: QuestionPrompt; created: number }>();
+  const owners = new Map<number, number>();
+
+  const showQuestion = async (ctx: Context, question: QuestionPrompt): Promise<void> => {
+    if (!ctx.chat || !ctx.from) return;
+    for (const [token, choice] of choices) {
+      if (Date.now() - choice.created > 3_600_000 || choices.size >= 100) choices.delete(token);
+    }
+    choices.set(question.token, { chatId: ctx.chat.id, userId: ctx.from.id, threadId: getSession(ctx.chat.id).info.threadId, question, created: Date.now() });
+    const keyboard = new InlineKeyboard();
+    question.options.forEach((option, index) => {
+      keyboard.text(`${index + 1}. ${option.label}`.slice(0, 60), `ask:${question.token}:${index}`).row();
+    });
+    const options = question.options.map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ""}`).join("\n");
+    await ctx.reply(`Codex question:\n${question.title}\n\n${options}\n\nChoose a button or send your own text answer.`.slice(0, 4000), { reply_markup: keyboard });
+  };
+
+  bot.callbackQuery(/^ask:([a-f0-9]{16}):(\d+)$/, async (ctx) => {
+    const token = ctx.match[1]!;
+    const choice = choices.get(token);
+    const session = ctx.chat ? getSession(ctx.chat.id) : undefined;
+    const option = choice?.question.options[Number(ctx.match[2])];
+    if (!choice || !session || !option || choice.chatId !== ctx.chat?.id || choice.userId !== ctx.from.id
+      || choice.threadId !== session.info.threadId || Date.now() - choice.created > 3_600_000
+      || (choice.question.kind === "follow-up" && session.question)) {
+      await ctx.answerCallbackQuery({ text: "This question has expired or belongs to another user.", show_alert: true });
+      return;
+    }
+    try {
+      if (choice.question.kind === "answer") session.answerQuestion(token, option.label);
+      choices.delete(token);
+      await ctx.answerCallbackQuery({ text: "Answer received" });
+      await ctx.editMessageReplyMarkup({ reply_markup: { inline_keyboard: [] } }).catch(() => undefined);
+      if (choice.question.kind === "follow-up") handlePrompt(ctx, `${choice.question.title}\nAnswer: ${option.label}`);
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: errorMessage(error), show_alert: true });
+    }
+  });
+
+  const handlePrompt = (ctx: Context, prompt: string): unknown => {
+    if (!ctx.chat || !ctx.from) return;
     const session = getSession(ctx.chat.id);
     if (session.busy) {
       try {
-        session.followUp(prompt);
-        return ctx.reply("Follow-up received. Interrupting the current turn and continuing this session…");
+        if (session.question) {
+          if (owners.get(ctx.chat.id) !== ctx.from.id) return ctx.reply("This question belongs to the user who started the task.");
+          const token = session.question.token;
+          session.answerQuestion(token, prompt);
+          choices.delete(token);
+          return ctx.reply("Answer received. Codex can continue.");
+        }
+        // Do not hold grammY's polling loop while waiting for a protocol acknowledgement.
+        void session.followUp(prompt).then(
+          () => ctx.reply("Follow-up delivered to Codex."),
+          (error: unknown) => ctx.reply(errorMessage(error)),
+        ).catch(() => console.error("Could not acknowledge Codex follow-up delivery."));
+        return;
       } catch (error) {
         return ctx.reply(errorMessage(error));
       }
     }
     const presenter = new TelegramStreamPresenter(ctx, getStreamMode(ctx.chat.id));
-    // Start the SDK turn before returning to grammY's polling loop so /stop can
-    // arrive while Codex is working, including during Telegram preview setup.
-    const run = session.run(prompt, (event) => presenter.onEvent(event));
-    void run.catch(() => undefined);
+    owners.set(ctx.chat.id, ctx.from.id);
+    let runFinished = false;
+    // Return to polling immediately; steering, questions, and /stop remain live.
+    const run = session.run(prompt, (event) => presenter.onEvent(event), (question) => {
+      void showQuestion(ctx, question).catch(() => {
+        if (!runFinished) session.stop();
+        console.error("Could not display Codex question.");
+      });
+    });
+    void run.finally(() => { runFinished = true; }).catch(() => undefined);
 
     void (async () => {
       const typing = setInterval(() => {
@@ -445,7 +500,7 @@ export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } 
         const result = await run;
         await presenter.complete(result.text);
       } catch (error) {
-        session.stop();
+        if (!runFinished) session.stop();
         const message = errorMessage(error);
         if (/abort/i.test(message)) await presenter.complete("The task was stopped.");
         else await presenter.fail(message.slice(0, 3500));
@@ -453,6 +508,12 @@ export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } 
         clearInterval(typing);
       }
     })().catch((error) => console.error("Could not finish Codex task presentation", errorMessage(error)));
+  };
+
+  bot.on("message:text", (ctx) => {
+    const prompt = ctx.message.text.trim();
+    if (!prompt || prompt.startsWith("/")) return;
+    return handlePrompt(ctx, prompt) as Promise<unknown> | undefined;
   });
 
   bot.catch(({ error, ctx }) => {

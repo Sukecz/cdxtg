@@ -327,8 +327,8 @@ function parseMode(raw: string | undefined, enableWrite: boolean, enableFullAcce
 
 function parseApprovalPolicy(raw: string | undefined): ApprovalMode {
   const value = optional(raw) ?? "never";
-  if (!(["never", "on-request", "on-failure", "untrusted"] as const).includes(value as ApprovalMode)) {
-    throw new Error("CODEX_APPROVAL_POLICY is invalid");
+  if (!(["never", "on-request", "untrusted"] as const).includes(value as "never" | "on-request" | "untrusted")) {
+    throw new Error("CODEX_APPROVAL_POLICY must be never, on-request, or untrusted. The legacy on-failure policy is no longer supported.");
   }
   return value as ApprovalMode;
 }

@@ -30,7 +30,7 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 - optional background rate-limit reset notifications and MQTT snapshots;
 - safe `read-only`, opt-in `workspace-write`, and confirmed `danger-full-access` modes;
 - cancellation of active tasks;
-- direct integration through the official TypeScript SDK without parsing CLI output;
+- integration through the official Codex App Server protocol, using the runtime bundled with `@openai/codex-sdk`;
 - long polling with no public domain, webhook, database, or extra infrastructure.
 
 > [!WARNING]
@@ -151,11 +151,15 @@ Add form validation and verify it with a test.
 
 `/new` and `/workspace` display a paginated inline picker. Like TeleCodex, cdxtg reads unique active workspace paths from the latest local `~/.codex/state_*.sqlite` database. Explicit `CODEX_WORKSPACES` entries are merged into this list. Missing and duplicate paths are removed automatically.
 
-`/resume` displays recent non-archived sessions across all workspaces in the same local Codex home. Selecting one restores its original existing workspace and continues it through the official SDK. Sessions created by cdxtg, Codex CLI, and other local Codex clients are eligible. Stale session files and missing workspace paths are ignored, and Telegram never supplies a path or thread ID directly.
+`/resume` displays recent non-archived sessions across all workspaces in the same local Codex home. Selecting one restores its original existing workspace and continues it through the official App Server protocol. Sessions created by cdxtg, Codex CLI, and other local Codex clients are eligible. Stale session files and missing workspace paths are ignored, and Telegram never supplies a path or thread ID directly.
 
-To continue a Telegram session from a desktop terminal connected to the **same host and user account** over SSH, open the workspace and run `codex resume --include-non-interactive`. This opens the session picker including Telegram sessions, without copying an ID from Telegram. For the latest session in that directory, use `codex resume --include-non-interactive --last`. The plain `codex resume` picker hides SDK sessions because Codex records their source as `exec`; the SDK's `threadSource` option controls a different classification and does not change this filter. `/status` shows both the picker command and a direct `codex resume <thread-id>` command. After a CLI turn ends, the same thread can continue in Telegram. The session history lives in that host's Codex home, so opening a separate local Codex installation on another computer will not show it. Avoid working on the same thread from both clients simultaneously.
+To continue a Telegram session from a desktop terminal connected to the **same host and user account** over SSH, open the workspace and run `codex resume --include-non-interactive`. This opens the session picker including Telegram sessions, without copying an ID from Telegram. For the latest session in that directory, use `codex resume --include-non-interactive --last`. The plain `codex resume` picker filters out non-interactive clients, including App Server and older SDK sessions. `/status` shows both the picker command and a direct `codex resume <thread-id>` command. After a CLI turn ends, the same thread can continue in Telegram. The session history lives in that host's Codex home, so opening a separate local Codex installation on another computer will not show it. Avoid working on the same thread from both clients simultaneously.
 
-While Codex is working, send another text message to answer a question, add context, or correct the task. cdxtg acknowledges it, interrupts the current SDK turn, and immediately continues the same thread with your follow-up. Multiple messages received during interruption are delivered together in order. This uses cancellation and continuation because the TypeScript SDK does not expose live steering; an active tool command can be interrupted. `/stop` cancels the task and any pending follow-ups. If a stop is already in progress, wait for it to finish before sending another task. With streaming disabled, intermediate questions are not shown; use `/stream brief` to see progress.
+While Codex is working, send another text message to add context or correct the task. cdxtg sends it to the active turn through `turn/steer`, without cancelling the task or its tools. Follow-ups are delivered in order and confirmed after Codex acknowledges them. If the turn finishes before a follow-up is delivered, it can become the next turn in the same thread. If delivery cannot be confirmed, the bot reports uncertainty instead of automatically replaying the input.
+
+Native Codex input requests appear as separate questions even when streaming is off. Choose an inline option or send your own text answer; only the user who started the task can answer. Multiple questions are presented one at a time and returned to the original Codex request. Structured asynchronous questions also get buttons; their answers steer the task or start the next turn if it has finished. Expired questions are rejected, secret-input prompts are not supported, and question answers never grant command, file, or network permissions.
+
+`/stop` uses `turn/interrupt` and prevents further follow-up delivery while stopping. The connection stays open during the task and closes after completion; the next task resumes the saved thread. Existing sessions remain resumable.
 
 Changing the workspace or mode starts a fresh Codex session. Extra workspace configuration is hot-reloaded from `telegram.env`, so adding a path does not require a restart.
 
@@ -182,12 +186,12 @@ Raw reasoning text is never sent to Telegram. Verbose command output may contain
 | `TELEGRAM_BOT_TOKEN` | required | Token received from BotFather |
 | `TELEGRAM_ALLOWED_USER_IDS` | empty | Comma-separated numeric Telegram user IDs; hot-reloaded at runtime |
 | `CODEX_WORKSPACES` | current directory | Optional extra paths merged with workspaces found in Codex history |
-| `CODEX_MODEL` | Codex default | Optional model passed to the SDK |
+| `CODEX_MODEL` | Codex default | Optional model for new Codex threads |
 | `CODEX_REASONING_EFFORT` | model default | `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` (subject to model support) |
 | `CODEX_DEFAULT_MODE` | `read-only` | `read-only`, `workspace-write`, or `danger-full-access` |
 | `CODEX_ENABLE_WRITE` | `false` | Enables switching to write mode; hot-reloaded at runtime |
 | `CODEX_ENABLE_FULL_ACCESS` | `false` | Enables confirmed `/mode full`; hot-reloaded at runtime |
-| `CODEX_APPROVAL_POLICY` | `never` | SDK approval policy; keep `never` for headless operation |
+| `CODEX_APPROVAL_POLICY` | `never` | App Server approval policy (`never`, `on-request`, or `untrusted`); keep `never` for headless operation. Interactive permission requests are declined |
 | `CDXTG_ENV_FILE` | `telegram.env` | Path to the local environment file |
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
 | `TELEGRAM_STREAM_MODE` | `brief` | Default streaming mode: `off`, `brief`, or `verbose` |
@@ -286,7 +290,7 @@ The package uses SemVer syntax such as `0.1.0`, while public feature releases ad
 
 ## Security boundaries
 
-- Telegram text is passed to the official Codex SDK as input and is never interpolated into a shell command.
+- Telegram text is passed as structured input to the official Codex App Server and is never interpolated into a shell command.
 - Unauthorized users receive only their own Telegram ID and no Codex access.
 - Workspace choices come from local Codex thread history and optional locally configured paths; Telegram users cannot submit arbitrary paths.
 - `danger-full-access` requires a local opt-in and an explicit Telegram confirmation.

@@ -3,7 +3,9 @@
 ## Unreleased
 
 - replaced native Telegram draft previews with one editable message to avoid blocking the send button during active tasks;
-- accepted follow-up messages during active tasks by interrupting and continuing the same SDK thread;
+- moved task execution to the official App Server protocol with in-turn steering and controlled cancellation;
+- added native Codex questions with inline choices, free-text answers, and stale-question checks;
+- preserved saved-thread continuation and verified sandbox and approval settings before starting work;
 - clarified the CLI picker command for finding Telegram sessions without copying thread IDs;
 - updated the official Codex SDK and bundled runtime to 0.163.0.
 - limited Telegram rate-limit reset notifications to the full weekly window while retaining shorter windows in status and MQTT output.
