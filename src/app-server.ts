@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
+import pkg from "../package.json" with { type: "json" };
 
 export interface RpcNotification { method: string; params: Record<string, unknown> }
 export interface RpcRequest extends RpcNotification { id: number | string }
@@ -40,7 +41,7 @@ export class AppServerClient implements AppServerConnection {
 
   async initialize(): Promise<void> {
     await this.request("initialize", {
-      clientInfo: { name: "cdxtg", title: "cdxtg", version: "1.2" },
+      clientInfo: { name: "cdxtg", title: "cdxtg", version: pkg.version },
       capabilities: { experimentalApi: true },
     });
     this.send({ method: "initialized" });

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createRequire } from "node:module";
 import { createInterface } from "node:readline";
+import pkg from "../package.json" with { type: "json" };
 import type { ModelReasoningEffort } from "@openai/codex-sdk";
 
 const STATUS_TIMEOUT_MS = 8_000;
@@ -198,7 +199,7 @@ async function queryAppServer(
       id: 1,
       method: "initialize",
       params: {
-        clientInfo: { name: "cdxtg", title: "cdxtg", version: "0.3" },
+        clientInfo: { name: "cdxtg", title: "cdxtg", version: pkg.version },
         capabilities: { experimentalApi: false, requestAttestation: false },
       },
     });
