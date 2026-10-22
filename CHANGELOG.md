@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- replaced native Telegram draft previews with one editable message to avoid blocking the send button during active tasks;
 - accepted follow-up messages during active tasks by interrupting and continuing the same SDK thread;
 - clarified the CLI picker command for finding Telegram sessions without copying thread IDs;
 - updated the official Codex SDK and bundled runtime to 0.163.0.

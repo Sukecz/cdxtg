@@ -20,7 +20,7 @@ Telegram  <->  cdxtg (grammY)  <->  @openai/codex-sdk  <->  Codex CLI  <->  work
 
 - private access through a Telegram user ID allowlist;
 - a separate Codex session for each chat;
-- native Telegram draft streaming in private chats, with message-edit fallback elsewhere;
+- progress streaming through one editable Telegram message while keeping chat input available;
 - `off`, `brief`, and `verbose` streaming modes with throttled updates;
 - automatic workspace discovery from local Codex thread history;
 - an inline workspace picker when starting a new session;
@@ -171,7 +171,7 @@ Streaming defaults to `brief` and can be changed per chat with `/stream`:
 - `brief` streams the emerging agent response plus compact command, file, web, tool, and plan status;
 - `verbose` additionally shows the latest bounded tool-output tail and expanded plan.
 
-In private chats, cdxtg uses Telegram's native ephemeral `sendMessageDraft` preview. Drafts are refreshed during long turns and replaced by a normal persistent final message. In groups or when drafts are unavailable, cdxtg edits one placeholder message instead. Updates are coalesced to avoid Telegram flood limits, previews are capped below Telegram's 4096-character limit, and long final answers are split safely.
+In all chats, cdxtg edits one ordinary placeholder message for progress and replaces its text with the final answer. Native `sendMessageDraft` previews are deliberately avoided because Telegram clients can block the send button while a draft is active, preventing follow-ups and `/stop`. Updates are coalesced to avoid Telegram flood limits, previews are capped below Telegram's 4096-character limit, and long final answers are split safely.
 
 Raw reasoning text is never sent to Telegram. Verbose command output may contain data printed by local tools, so use it only in a trusted private chat.
 

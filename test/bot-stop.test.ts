@@ -7,7 +7,7 @@ import { loadConfig } from "../src/config.js";
 afterEach(() => vi.restoreAllMocks());
 
 describe("/stop during a running turn", () => {
-  it("accepts a regular reply during work and delivers the continued answer", async () => {
+  it.each(["off", "brief", "verbose"])("accepts a reply during work with %s streaming and delivers the continued answer", async (mode) => {
     const inputs: string[] = [];
     const thread = {
       runStreamed: async (prompt: string, { signal }: { signal: AbortSignal }) => {
@@ -30,10 +30,12 @@ describe("/stop during a running turn", () => {
     vi.spyOn(Codex.prototype, "startThread").mockReturnValue(thread as unknown as Thread);
     const bot = createBot(loadConfig({
       TELEGRAM_BOT_TOKEN: "test-token", TELEGRAM_ALLOWED_USER_IDS: "123",
-      CODEX_WORKSPACES: process.cwd(), TELEGRAM_STREAM_MODE: "off",
+      CODEX_WORKSPACES: process.cwd(), TELEGRAM_STREAM_MODE: mode,
     }));
     const sent: string[] = [];
+    const methods: string[] = [];
     bot.api.config.use((async (_previous, method, payload) => {
+      methods.push(method);
       if (method === "getMe") return { ok: true, result: { id: 1, is_bot: true, first_name: "Test", username: "test_bot" } };
       if (method === "sendMessage" || method === "editMessageText") sent.push(String((payload as { text: string }).text));
       return { ok: true, result: { message_id: sent.length, chat: { id: 123, type: "private" }, date: 0 } };
@@ -46,6 +48,7 @@ describe("/stop during a running turn", () => {
     expect(inputs).toHaveLength(2);
     expect(inputs[1]).toContain("My answer");
     expect(sent).not.toContain("The task was stopped.");
+    expect(methods).not.toContain("sendMessageDraft");
   });
 
   it("processes the stop update while the SDK stream is still active", async () => {

@@ -1,20 +1,15 @@
-import { randomInt } from "node:crypto";
 import type { Context } from "grammy";
 import type { ThreadEvent } from "@openai/codex-sdk";
 import { splitTelegramText } from "./text.js";
 import { applyStreamEvent, createStreamState, renderStreamPreview, type StreamMode } from "./streaming.js";
 
 const FLUSH_INTERVAL_MS = 1_200;
-const DRAFT_HEARTBEAT_MS = 20_000;
 
 export class TelegramStreamPresenter {
   private readonly state = createStreamState();
-  private readonly draftId = randomInt(1, 2_147_483_647);
   private readonly chatId: number;
-  private useDraft: boolean;
   private placeholderMessageId: number | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
-  private heartbeat: NodeJS.Timeout | null = null;
   private lastFlushAt = 0;
   private lastPreview = "";
   private closed = false;
@@ -26,7 +21,6 @@ export class TelegramStreamPresenter {
   ) {
     if (!ctx.chat) throw new Error("Telegram stream requires a chat context");
     this.chatId = ctx.chat.id;
-    this.useDraft = mode !== "off" && ctx.chat.type === "private";
   }
 
   async start(): Promise<void> {
@@ -35,18 +29,8 @@ export class TelegramStreamPresenter {
       return;
     }
 
-    if (this.useDraft) {
-      try {
-        await this.ctx.api.sendMessageDraft(this.chatId, this.draftId, "");
-        this.heartbeat = setInterval(() => {
-          if (this.useDraft && !this.closed) void this.flush(true);
-        }, DRAFT_HEARTBEAT_MS);
-        this.heartbeat.unref();
-        return;
-      } catch {
-        this.useDraft = false;
-      }
-    }
+    // Native drafts can lock the Telegram client's send button. Use an ordinary
+    // message so replies and /stop remain available while Codex is working.
     await this.ensurePlaceholder("⏳ Codex is starting…");
   }
 
@@ -69,32 +53,21 @@ export class TelegramStreamPresenter {
     const delay = Math.max(0, FLUSH_INTERVAL_MS - (Date.now() - this.lastFlushAt));
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      void this.flush(false);
+      void this.flush();
     }, delay);
     this.flushTimer.unref();
   }
 
-  private async flush(force: boolean): Promise<void> {
-    const run = this.inFlight.then(() => this.flushNow(force));
+  private async flush(): Promise<void> {
+    const run = this.inFlight.then(() => this.flushNow());
     this.inFlight = run.catch(() => undefined);
     await run;
   }
 
-  private async flushNow(force: boolean): Promise<void> {
+  private async flushNow(): Promise<void> {
     if (this.closed || this.mode === "off") return;
     const preview = renderStreamPreview(this.state, this.mode) || "⏳ Codex is working…";
-    if (!force && preview === this.lastPreview) return;
-
-    if (this.useDraft) {
-      try {
-        await this.ctx.api.sendMessageDraft(this.chatId, this.draftId, preview);
-        this.lastPreview = preview;
-        this.lastFlushAt = Date.now();
-        return;
-      } catch {
-        this.useDraft = false;
-      }
-    }
+    if (preview === this.lastPreview) return;
 
     await this.ensurePlaceholder(preview);
     if (this.placeholderMessageId !== null && preview !== this.lastPreview) {
@@ -118,7 +91,6 @@ export class TelegramStreamPresenter {
     if (this.closed) return;
     this.closed = true;
     if (this.flushTimer) clearTimeout(this.flushTimer);
-    if (this.heartbeat) clearInterval(this.heartbeat);
     await this.inFlight;
 
     const chunks = splitTelegramText(text);

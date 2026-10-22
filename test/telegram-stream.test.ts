@@ -7,16 +7,17 @@ afterEach(() => {
 });
 
 describe("TelegramStreamPresenter", () => {
-  it("uses ephemeral Telegram drafts in private chats and persists the final answer", async () => {
+  it.each(["brief", "verbose"] as const)("uses an ordinary private-chat message in %s mode without native drafts", async (mode) => {
     vi.useFakeTimers();
     const sendMessageDraft = vi.fn().mockResolvedValue(true);
     const reply = vi.fn().mockResolvedValue({ message_id: 10 });
+    const editMessageText = vi.fn().mockResolvedValue({});
     const ctx = {
       chat: { id: 123, type: "private" },
-      api: { sendMessageDraft, editMessageText: vi.fn() },
+      api: { sendMessageDraft, editMessageText },
       reply,
     } as unknown as Context;
-    const presenter = new TelegramStreamPresenter(ctx, "brief");
+    const presenter = new TelegramStreamPresenter(ctx, mode);
 
     await presenter.start();
     presenter.onEvent({
@@ -25,14 +26,18 @@ describe("TelegramStreamPresenter", () => {
     });
     await vi.advanceTimersByTimeAsync(1_300);
 
-    expect(sendMessageDraft).toHaveBeenCalledWith(123, expect.any(Number), "");
-    expect(sendMessageDraft).toHaveBeenLastCalledWith(123, expect.any(Number), expect.stringContaining("Streaming answer"));
+    expect(reply).toHaveBeenCalledWith("⏳ Codex is starting…");
+    expect(editMessageText).toHaveBeenLastCalledWith(123, 10, expect.stringContaining("Streaming answer"));
+    await vi.advanceTimersByTimeAsync(25_000);
+    expect(sendMessageDraft).not.toHaveBeenCalled();
 
     await presenter.complete("Final answer");
-    expect(reply).toHaveBeenCalledWith("Final answer");
+    expect(editMessageText).toHaveBeenLastCalledWith(123, 10, "Final answer");
+    expect(reply).toHaveBeenCalledTimes(1);
+    expect(sendMessageDraft).not.toHaveBeenCalled();
   });
 
-  it("falls back to editing one placeholder outside private chats", async () => {
+  it("edits one placeholder in group chats", async () => {
     vi.useFakeTimers();
     const editMessageText = vi.fn().mockResolvedValue({});
     const reply = vi.fn().mockResolvedValue({ message_id: 44 });
