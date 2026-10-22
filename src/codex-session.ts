@@ -19,6 +19,9 @@ export class CodexSession {
   private abortController: AbortController | null = null;
   private options: SessionOptions;
   private currentThreadId: string | null = null;
+  private pendingInputs: string[] = [];
+  private turnStarted = false;
+  private stopping = false;
 
   constructor(options: SessionOptions) {
     this.options = options;
@@ -49,8 +52,18 @@ export class CodexSession {
 
   stop(): boolean {
     if (!this.abortController) return false;
+    this.stopping = true;
+    this.pendingInputs = [];
     this.abortController.abort();
     return true;
+  }
+
+  followUp(prompt: string): void {
+    if (!this.busy) throw new Error("No task is running in this chat.");
+    if (this.stopping) throw new Error("The task is stopping. Send your message again once it stops.");
+    this.pendingInputs.push(prompt);
+    // Wait until the initial input has reached the thread before cancelling it.
+    if (this.turnStarted) this.abortController!.abort();
   }
 
   async run(prompt: string, onEvent?: (event: ThreadEvent) => void): Promise<RunResult> {
@@ -59,22 +72,49 @@ export class CodexSession {
 
     const controller = new AbortController();
     this.abortController = controller;
-    let text = "";
+    this.stopping = false;
+    this.turnStarted = false;
 
     try {
-      const { events } = await this.thread.runStreamed(prompt, { signal: controller.signal });
-      for await (const event of events) {
-        onEvent?.(event);
-        if (event.type === "thread.started") this.currentThreadId = event.thread_id;
-        if (event.type === "item.completed" && event.item.type === "agent_message") {
-          text = event.item.text;
+      let input = prompt;
+      const inputs = [prompt];
+      while (true) {
+        let text = "";
+        const activeController = this.abortController!;
+        try {
+          const { events } = await this.thread.runStreamed(input, { signal: activeController.signal });
+          for await (const event of events) {
+            if (event.type === "thread.started") this.currentThreadId = event.thread_id;
+            if (event.type === "turn.started") this.turnStarted = true;
+            if (this.turnStarted && this.pendingInputs.length > 0) activeController.abort();
+            // An interrupted turn is an implementation detail, not a task failure.
+            if (!activeController.signal.aborted) onEvent?.(event);
+            if (event.type === "item.completed" && event.item.type === "agent_message") {
+              text = event.item.text;
+            }
+            if (event.type === "turn.failed") throw new Error(event.error.message);
+            if (event.type === "error") throw new Error(event.message);
+          }
+        } catch (error) {
+          if (this.stopping) throw new DOMException("The task was aborted", "AbortError");
+          if (!activeController.signal.aborted || this.pendingInputs.length === 0) throw error;
         }
-        if (event.type === "turn.failed") throw new Error(event.error.message);
-        if (event.type === "error") throw new Error(event.message);
+        if (this.stopping) throw new DOMException("The task was aborted", "AbortError");
+        if (this.pendingInputs.length === 0) return { text, threadId: this.currentThreadId };
+        // Exec can emit turn.started before the original user message is durably
+        // saved. Carry all inputs across interruptions so early replies cannot
+        // discard the task, even when the resumed history is still incomplete.
+        inputs.push(...this.pendingInputs);
+        input = "The previous SDK turn was interrupted. Continue the original task using the following user messages in chronological order:\n\n"
+          + inputs.map((message, index) => `User message ${index + 1}:\n${message}`).join("\n\n");
+        this.pendingInputs = [];
+        this.turnStarted = false;
+        this.abortController = new AbortController();
       }
-      return { text, threadId: this.currentThreadId };
     } finally {
-      if (this.abortController === controller) this.abortController = null;
+      this.abortController = null;
+      this.pendingInputs = [];
+      this.turnStarted = false;
     }
   }
 

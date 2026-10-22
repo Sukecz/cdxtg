@@ -21,7 +21,7 @@
     "service:status": "systemctl --user status cdxtg.service --no-pager"
   },
   "dependencies": {
-    "@openai/codex-sdk": "^0.159.0",
+    "@openai/codex-sdk": "^0.163.0",
     "dotenv": "^17.2.3",
     "grammy": "^1.44.0",
     "mqtt": "^5.15.2"

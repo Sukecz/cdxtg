@@ -28,7 +28,7 @@ const HELP = `cdxtg commands:
 /stop – stop the running task
 /version – show the cdxtg version
 
-Send any regular text message to give Codex a task.`;
+Send any regular text message to give Codex a task. During a task, send a reply or correction to interrupt and continue the same session.`;
 
 export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } {
   const bot = new Bot(config.telegramBotToken);
@@ -131,6 +131,7 @@ export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } 
       `Mode: ${info.mode}`,
       `Thread: ${info.threadId ?? "new – created with the first task"}`,
       ...(info.threadId ? [`Continue in Codex CLI: codex resume ${info.threadId}`] : []),
+      "Browse Telegram sessions in Codex CLI: codex resume --include-non-interactive",
       `Streaming: ${getStreamMode(ctx.chat.id)}`,
       ...(runtime.rateLimits
         ? formatRateLimits(runtime.rateLimits)
@@ -419,7 +420,12 @@ export function createBot(config: AppConfig): Bot & { stopActiveTurns(): void } 
     if (!prompt || prompt.startsWith("/")) return;
     const session = getSession(ctx.chat.id);
     if (session.busy) {
-      return ctx.reply("A task is already running in this chat. Wait or use /stop.");
+      try {
+        session.followUp(prompt);
+        return ctx.reply("Follow-up received. Interrupting the current turn and continuing this session…");
+      } catch (error) {
+        return ctx.reply(errorMessage(error));
+      }
     }
     const presenter = new TelegramStreamPresenter(ctx, getStreamMode(ctx.chat.id));
     // Start the SDK turn before returning to grammY's polling loop so /stop can

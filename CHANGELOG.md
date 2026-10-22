@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- accepted follow-up messages during active tasks by interrupting and continuing the same SDK thread;
+- clarified the CLI picker command for finding Telegram sessions without copying thread IDs;
+- updated the official Codex SDK and bundled runtime to 0.163.0.
 - limited Telegram rate-limit reset notifications to the full weekly window while retaining shorter windows in status and MQTT output.
 
 ## 1.2 — 2026-07-21
